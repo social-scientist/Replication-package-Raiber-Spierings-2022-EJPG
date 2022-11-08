@@ -1,0 +1,667 @@
+---
+title: "Data preparation: Gender patterns in Parliamentary Speech - doi: 10.1332/251510821X1653948960862"
+author: "Klara Raiber"
+date: "18/05/2022"
+---
+
+#setup 
+```{r setup}
+library(beepr)
+library(stringr)
+library(plyr)
+library(foreign)
+library(tidyr)
+library(kableExtra)
+library(caret)
+#library(randomForest)
+library(pdp)
+library(plotmo)
+library(PRROC)
+library(verification)
+library(beepr)
+library(dplyr)
+library(haven)
+library(tidyverse)
+library(magrittr)
+library(plotly)
+library(ggplot2)
+library(quanteda)
+library(readtext)
+library(antiword)
+library(XML)
+library(httr)
+library(methods)
+library(data.table)
+library(tidytext)
+library(NLP)
+library(tm)
+library(igraph)
+#install.packages("regrexSelect")
+library(regexSelect)
+library(mclust)
+library(tictoc)
+
+## Clear and working directory
+
+setwd("") # insert own file directory
+
+
+#clear environment
+rm(list=ls())
+
+#set seed
+set.seed(2109)
+
+#check memory limit
+memory.limit()
+memory.limit(size = 20000)
+```
+
+## Built data set
+
+```{r  error=TRUE}
+
+#empty list for files
+files <- list.files()
+
+#list
+datalist <- list()
+
+#include files
+for(i in files){
+  name <- paste(i)
+  tmp <- xmlTreeParse(i, useInternal = T) #tmp is probably more structured than in data frame
+  dat <- xmlToDataFrame(tmp)
+  dat$i <- i  
+  datalist[[i]] <- dat
+}
+
+#put all in one object
+big_data <- dplyr::bind_rows(datalist)
+
+#have a look
+#big_data$text[1]
+
+#delete .xml 
+big_data$i <- sub(".xml", "", big_data$i)
+
+#have a look
+#big_data$i[1]
+
+##changing format
+big_data$count <- rep(1:6)
+big_data$count
+
+#save in-between
+#save(big_data,file="longdata.Rda")
+
+#to wide 
+setDT(big_data)
+data <- dcast(big_data, i ~ count, value.var = "text")
+
+#save
+#save(data,file="widedata.Rda")
+
+#load("widedata.Rda")
+#have a look
+#data$i[1]
+
+#rename variable names
+names(data)[names(data)=="1"] <- "wp"
+names(data)[names(data)=="2"] <- "dok"
+names(data)[names(data)=="3"] <- "sitz"
+names(data)[names(data)=="4"] <- "datum"
+names(data)[names(data)=="5"] <- "titel"
+names(data)[names(data)=="6"] <- "text"
+names(data)[names(data)=="i"] <- "xml"
+
+#save
+#save(data,file="widedata.Rda")
+
+#have a look
+#data$text[1]
+
+#delete hyphenation
+data$text1 <- gsub("-\n", "", data$text)
+#data$text1[1]
+
+#delete n
+data$text2 <- gsub("\n", " ", data$text1)
+#data$text2[1]
+
+#remove all in documents after "Die Sitzung ist geschlossen."
+p <- sapply(1:245, function(i){
+  data$text2 <- str_remove(data$text2[i], "Die Sitzung ist geschlossen.*")
+  })
+
+data$text3 <- p
+
+#data$text3[1]
+#p[1]
+
+clean <- subset(data, select = c(xml, wp, dok, sitz, datum, titel, text3))
+
+#text3 are all texts without last part of documents
+names(clean)[names(clean)=="text3"] <- "text"
+
+#put it in a new corpus
+corpus1 <- corpus(clean)
+
+#have a look
+#summary(corpus1)
+
+#save
+save(corpus1, file="corpus1.Rda")
+```
+
+## find pattern
+
+```{r}
+#load data
+load("corpus1.Rda")
+load("Stammdaten18.Rda")
+
+#include vollname
+total18$VOLLNAME <-  as.factor(paste(total18$VORNAME, total18$NACHNAME, sep = " "))
+
+#vollname and :
+total18$nameUdpunkt <- paste0(total18$VOLLNAME, ":")
+
+#pattern with name:
+total18$name1 <- ifelse(is.na(total18$nameUdpunkt)|total18$nameUdpunkt==" ", total18$ID, 
+                         total18$nameUdpunkt)
+#pattern with name (party):
+total18$name2 <- ifelse(is.na(total18$nameUpartyUdpunkt)|total18$nameUpartyUdpunkt==" ", 
+                        total18$ID, total18$nameUpartyUdpunkt)
+
+#pattern with name (party) (location):
+total18$name3 <- ifelse(is.na(total18$nameUpartyUdpunktO)|total18$nameUpartyUdpunktO==" ", 
+                        total18$ID, total18$nameUpartyUdpunktO)
+
+#first pattern with office
+total18$patti1 <- ifelse(is.na(total18$pattern1)|total18$pattern1==" ", total18$ID, 
+                         total18$pattern1)
+
+#second pattern with office
+total18$patti2 <- ifelse(is.na(total18$pattern2)|total18$pattern2==" ", total18$ID, 
+                         total18$pattern2)
+
+#third pattern with office
+total18$patti3 <- ifelse(is.na(total18$pattern3)|total18$pattern3==" ", total18$ID, 
+                         total18$pattern3)
+
+#save 
+save(total18, file="Stammdaten18.Rda")
+
+#put pattern to list
+nam1 <- as.list(as.character(total18$name1))
+nam2 <- as.list(as.character(total18$name2))
+nam3 <- as.list(as.character(total18$name3))
+nam4 <- as.list(as.character(total18$patti1))
+nam5 <- as.list(as.character(total18$patti2))
+nam6 <- as.list(as.character(total18$patti3))
+
+#combine all patterns
+nami <- c(nam1, nam2, nam3, nam4, nam5, nam6)
+
+#save all patterns
+save(nami,file="nami.Rmd")
+
+
+#Pattern recognition
+corpus2 <- corpus_segment(corpus1, pattern = phrase(nami))
+
+#have a look
+#head(corpus2$documents, 30)
+
+#save
+save(corpus2,file="corpus2_newtry.Rmd")
+
+
+```
+
+## Identify Persons
+
+```{r}
+#load data
+load("corpus2_newtry.Rmd")
+load("Stammdaten18.Rda")
+
+
+## new data frame as a helper
+new <- data.frame(corpus2$documents$pattern)
+
+new$per1 <- as.numeric(match(corpus2$documents$pattern, total18$name1))
+
+new$per2 <- as.numeric(match(corpus2$documents$pattern, total18$name2))
+
+new$per3 <- as.numeric(match(corpus2$documents$pattern, total18$name3))
+
+new$per4 <- as.numeric(match(corpus2$documents$pattern, total18$patti1))
+
+new$per5 <- as.numeric(match(corpus2$documents$pattern, total18$patti2))
+
+new$per6 <- as.numeric(match(corpus2$documents$pattern, total18$patti3))
+
+new$corpus2.documents.pattern <- NULL
+
+
+## include one count variable in corpus
+corpus2$documents$count <- apply(new, 1, max, na.rm = T)
+#is.na(corpus2$documents$count)
+
+#compare - they are similar like in the Stammdaten
+total18$ID[28] # ID von Heinz Riesenhuber
+total18$VOLLNAME[28]
+total18$ID[214]
+total18$VOLLNAME[214]
+total18$ID[92]
+total18$VOLLNAME[92]
+
+#table(corpus2$documents$count, useNA = "always") 
+
+##Include ID
+corpus2$documents$ID <- as.character(sapply(corpus2$documents$count, function(i){
+  total18$ID[i]}))
+
+##Include Sex
+corpus2$documents$SEX <- as.character(sapply(corpus2$documents$count, function(i){
+  total18$GESCHLECHT[i]}))
+#check
+#total18$GESCHLECHT[1]
+#total18$VOLLNAME[1]
+
+#Include Party
+corpus2$documents$party <- as.character(sapply(corpus2$documents$count, function(i){
+  total18$PARTEI_KURZ[i]}))
+
+
+#make character out of vollname
+total18$VOLLNAME <- as.character(total18$VOLLNAME)
+
+##Include Vollname
+corpus2$documents$VOLLNAME <- as.character(sapply(corpus2$documents$count, function(i){
+  total18$VOLLNAME[i]}))
+
+
+#build variable for seniority before or after 22.10.2013
+total18$startdate <- as.Date.character(total18$HISTORIE_VON, tryFormats = c("%d.%m.%Y"))
+total18$seniority <- ifelse(total18$startdate >= c("2013-10-22"), 0, 1)
+table(total18$seniority)
+
+#include senority
+corpus2$documents$seniority <- as.character(sapply(corpus2$documents$count, function(i){
+  total18$seniority[i]}))
+
+#save
+save(corpus2, file="corpus2_20200826.Rmd")
+
+```
+
+## Delete all in brackets
+
+```{r}
+#load data
+load("corpus2_20200826.Rmd")
+
+#new object
+corpus3 <- corpus2
+
+#without brackets
+ohneBra <- corpus(gsub("\\s*\\([^\\)]+\\)", "", corpus2))
+
+#include in new object
+corpus3$documents$texts <- ohneBra$documents$text 
+
+#save
+save(corpus3, file="corpus3_20200826.Rmd")
+```
+
+## How long are the sentences?
+
+```{r}
+#load data
+load("corpus1.Rda")
+
+#delete hackling
+ohneBra_2 <- corpus(gsub("\\s*\\([^\\)]+\\)", "", corpus1))
+
+#check
+#ohneBra_2[1]
+#summary(ohneBra_2)
+
+#delete all before the begin of the sessions in the documents
+ohne_dav <- corpus(gsub("^.*Beginn:", "", ohneBra_2))
+#ohne_dav[1]
+
+#to sentences
+leng <- corpus_reshape(ohne_dav, to = "sentences")
+#leng[1]
+
+#put into a helper-object
+zwischi <- Corpus(VectorSource(leng))
+
+#delete patterns
+load("Stammdaten18.Rda")
+
+nam_1 <- as.character(total18$name1)
+zwischi <- tm_map(zwischi, removeWords, nam_1)
+
+nam_2 <- as.character(total18$name2)
+zwischi <- tm_map(zwischi, removeWords, nam_2)
+
+nam_3 <- as.character(total18$name3)
+zwischi <- tm_map(zwischi, removeWords, nam_3)
+
+nam_4 <- as.character(total18$patti1)
+zwischi <- tm_map(zwischi, removeWords, nam_4)
+
+nam_5 <- as.character(total18$patti2)
+zwischi <- tm_map(zwischi, removeWords, nam_5)
+
+nam_6 <- as.character(total18$patti3)
+zwischi <- tm_map(zwischi, removeWords, nam_6)
+
+#lower cases
+zwischi <- tm_map(zwischi, tolower)
+
+#Different kind of words:
+wordstodelete <-  c("dass","1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "0.",
+                  "dr", "a", "b", "c", "d", "g", "deutscher bundestag", "deutschen 
+                  Bundestages","sitzung", "bundestag", "z.B.",
+                  "wahlperiode", "berlin", 
+                  "montag", "dienstag", "mittwoch", "donnerstag", "freitag", "januar", "februar",
+                  "märz", "april", "mai", "juni", "juli", "august", "september", "oktober", 
+                  "november", "dezember")
+zwischi <- tm_map(zwischi, removeWords, wordstodelete)
+
+
+#Numbers
+zwischi <- tm_map(zwischi, removeNumbers)
+
+#Stopwords
+zwischi <- tm_map(zwischi, removeWords, stopwords("german"))
+
+#Vornamen
+
+vornamen <- as.character(total18$VORNAME)
+vornamen <- unique(vornamen)
+vornamen <- tolower(vornamen)
+zwischi <- tm_map(zwischi, removeWords, vornamen)
+
+#Nachnamen
+nachnamen <- as.character(total18$NACHNAME)
+nachnamen <- unique(nachnamen)
+nachnamen <- tolower(nachnamen)
+zwischi <- tm_map(zwischi, removeWords, nachnamen)
+
+#put clean data to "normal" corpus
+leng$documents$texts <- zwischi$content
+
+#remove "
+ohneanfue <- corpus(gsub("\"", "", leng)) # 
+# remove ...
+ohneanfue <- corpus(gsub("^...$", "", ohneanfue))
+#remove one letter words (lower case)
+ohneanfue <- corpus(gsub("\\b\\w{1}\\b", "", ohneanfue))
+#remove §
+ohneanfue <- corpus(gsub("§", "", ohneanfue))
+#remove «
+ohneanfue <- corpus(gsub("«", "", ohneanfue))
+#remove »
+ohneanfue <- corpus(gsub("»", "", ohneanfue))
+#remove ·
+ohneanfue <- corpus(gsub("·", "", ohneanfue))
+#remove ´
+ohneanfue <- corpus(gsub("´", "", ohneanfue))
+#remove ,
+ohneanfue <- corpus(gsub(",", "", ohneanfue))
+#remove °
+ohneanfue <- corpus(gsub("°", "", ohneanfue))
+#remove .
+zwischi <- corpus(gsub(".", "", ohneanfue))
+
+#back to tm-corpus
+zwischi <- Corpus(VectorSource(ohneanfue))
+
+
+#remove white space
+zwischi <- tm_map(zwischi, stripWhitespace)
+
+#save helper
+save(zwischi, file="zwischi.Rda")
+
+#put to normal corpus
+sen <- corpus(zwischi$content)
+
+#check the sentences
+sum_sen_2 <- sapply(strsplit(sen$documents$texts, " "), length)
+mean(sum_sen_2) #8,6
+median(sum_sen_2) #7
+
+
+```
+
+## Cleaning
+
+```{r}
+#load("Stammdaten.Rda")
+load("Stammdaten18.Rda")
+load("corpus3_20200826.Rmd")
+
+#make tm corpus
+corpus4 <- Corpus(VectorSource(corpus3))
+
+#lower cases
+corpus4 <- tm_map(corpus4, tolower)
+
+#Different kind of words:
+wordstodelete <-
+  c(
+    "dass",
+    "1.",
+    "2.",
+    "3.",
+    "4.",
+    "5.",
+    "6.",
+    "7.",
+    "8.",
+    "9.",
+    "0.",
+    "dr",
+    "a",
+    "b",
+    "c",
+    "d",
+    "g",
+    "deutscher bundestag",
+    "deutschen Bundestages",
+    "sitzung",
+    "bundestag",
+    "z.B.",
+    "wahlperiode",
+    "berlin",
+    "montag",
+    "dienstag",
+    "mittwoch",
+    "donnerstag",
+    "freitag",
+    "januar",
+    "februar",
+    "märz",
+    "april",
+    "mai",
+    "juni",
+    "juli",
+    "august",
+    "september",
+    "oktober",
+    "november",
+    "dezember"
+  )
+corpus4 <- tm_map(corpus4, removeWords, wordstodelete)
+
+#Numbers
+corpus4 <- tm_map(corpus4, removeNumbers)
+
+#Stopwords
+corpus4 <- tm_map(corpus4, removeWords, stopwords("german"))
+
+#Vornamen
+vornamen <- as.character(total18$VORNAME)
+vornamen <- unique(vornamen)
+vornamen <- tolower(vornamen)
+corpus4 <- tm_map(corpus4, removeWords, vornamen)
+
+#Nachnamen
+nachnamen <- as.character(total18$NACHNAME)
+nachnamen <- unique(nachnamen)
+nachnamen <- tolower(nachnamen)
+corpus4 <- tm_map(corpus4, removeWords, nachnamen)
+
+#punctuation 
+corpus4 <- tm_map(corpus4, removePunctuation)
+
+#save
+save(corpus4, file="Zwischenkorpus.Rmd")
+
+load("Zwischenkorpus.Rmd")
+#put cleaned data to corpus 3
+corpus3$documents$texts <- corpus4$content
+
+#remove "
+ohneanfue <- corpus(gsub("\"", "", corpus3)) # 
+#remove "
+ohneanfue <- corpus(gsub('"', "", ohneanfue)) #  
+#remove one letter words (lower case)
+ohneanfue <- corpus(gsub("\\b\\w{1}\\b", "", ohneanfue))
+#remove §
+ohneanfue <- corpus(gsub("§", "", ohneanfue))
+#remove «
+ohneanfue <- corpus(gsub("«", "", ohneanfue))
+#remove »
+ohneanfue <- corpus(gsub("»", "", ohneanfue))
+#remove ·
+ohneanfue <- corpus(gsub("·", "", ohneanfue))
+#remove ´
+ohneanfue <- corpus(gsub("´", "", ohneanfue))
+#remove ,
+ohneanfue <- corpus(gsub("\\,", "", ohneanfue))
+#remove °
+ohneanfue <- corpus(gsub("°", "", ohneanfue))
+#remove .
+ohneanfue <- corpus(gsub("\\.", "", ohneanfue))
+#remove 2
+ohneanfue <- corpus(gsub("2", "", ohneanfue))
+
+
+#put to corpus 3
+corpus3$documents$texts <- ohneanfue$documents$text 
+
+#save
+save(corpus3, file="corpus_20200827.Rda")
+```
+
+# Prepare different data set for analysis
+
+```{r}
+load("corpus_20200827.Rda")
+#to check how many words are used in total 
+
+#put all words to a dfm
+dtm_all <- dfm(corpus3)
+
+#check how many different words are used
+length(dtm_all@Dimnames$features) #208,864 different words
+
+#build an object for all words
+top_full <- topfeatures(dtm_all, length(dtm_all@Dimnames$features)) #all topfeatures
+
+#data frame
+dtm_all <- data.frame(top_full)
+
+#Call variable Count
+names(dtm_all)[1] <- 'Count'
+
+#check how many words are used in total
+sum(dtm_all$Count) 
+
+#################
+#####FEMALES#####
+#################
+#sub-corpus for women
+corp_wom <- corpus_subset(corpus3, SEX=="weiblich")
+save(corp_wom, file="corp_wom_20200827.Rda")
+#D
+
+dtm_wom <- dfm(corp_wom) 
+
+length(dtm_wom@Dimnames$features) #123172
+save(dtm_wom, file="dtm_wom_20200827.Rda")
+
+###################
+#CDU/CSU
+corp_wom_cdu <- corpus_subset(corp_wom, (party=="CDU" | party =="CSU" ))
+save(corp_wom_cdu, file ="corp_wom_cdu.Rda")
+dtm_wom_cdu <- dfm(corp_wom_cdu) 
+save(dtm_wom_cdu, file="dtm_wom_cdu.Rda")
+
+
+###################
+#SPD
+corp_wom_spd <- corpus_subset(corp_wom, (party=="SPD"))
+save(corp_wom_spd, file ="corp_wom_spd.Rda")
+dtm_wom_spd <- dfm(corp_wom_spd) 
+save(dtm_wom_spd, file="dtm_wom_spd.Rda")
+
+
+###################
+#LINKE GRUENE
+corp_wom_opo <- corpus_subset(corp_wom, (party=="DIE LINKE." |  
+                                           party=="BÜNDNIS 90/DIE GRÜNEN" ))
+save(corp_wom_opo,file ="corp_wom_opo.Rda")
+dtm_wom_opo <- dfm(corp_wom_opo) 
+save(dtm_wom_opo, file ="dtm_wom_opo.Rda")
+
+
+#################
+######MALES######
+#################
+#sub-corpus for men
+corp_men <- corpus_subset(corpus3, SEX=="männlich")
+save(corp_men, file="corp_men_20200827.Rda")
+#Dfm for men
+dtm_men <- dfm(corp_men) 
+length(dtm_men@Dimnames$features) #162210
+save(dtm_men, file="dtm_men_20200827.Rda")
+
+###################
+#CDU/CSU
+corp_men_cdu <- corpus_subset(corp_men, (party=="CDU" | party =="CSU" ))
+save(corp_men_cdu, file ="corp_men_cdu.Rda")
+dtm_men_cdu <- dfm(corp_men_cdu) 
+save(dtm_men_cdu, file="dtm_men_cdu.Rda")
+
+
+###################
+#SPD
+corp_men_spd <- corpus_subset(corp_men, (party=="SPD"))
+save(corp_men_spd, file ="corp_men_spd.Rda")
+dtm_men_spd <- dfm(corp_men_spd) 
+save(dtm_men_spd, file="dtm_men_spd.Rda")
+
+
+###################
+#LINKE GRUENE
+corp_men_opo <- corpus_subset(corp_men, (party=="DIE LINKE." |  
+                                           party == "BÜNDNIS 90/DIE GRÜNEN" ))
+save(corp_men_opo,file ="corp_men_opo.Rda")
+dtm_men_opo <- dfm(corp_men_opo) 
+save(dtm_men_opo, file ="dtm_men_opo.Rda")
+
+
+```
+
+
+

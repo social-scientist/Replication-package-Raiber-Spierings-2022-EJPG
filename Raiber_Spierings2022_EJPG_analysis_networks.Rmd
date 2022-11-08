@@ -1,0 +1,1438 @@
+---
+title: "Analysis on networks: Gender patterns in Parliamentary Speech - doi: 10.1332/251510821X1653948960862"
+author: "Klara Raiber"
+date: "18/05/2022"
+---
+
+#setup
+```{r setup}
+library(dplyr)
+library(stringr)
+library(plyr)
+library(foreign)
+library(tidyr)
+library(kableExtra)
+library(caret)
+library(plotmo)
+library(PRROC)
+library(verification)
+library(beepr)
+library(dplyr)
+library(haven)
+library(tidyverse)
+library(magrittr)
+library(plotly)
+library(ggplot2)
+library(quanteda)
+library(readtext)
+library(antiword)
+library(XML)
+library(httr)
+library(methods)
+library(data.table)
+library(tidytext)
+library(NLP)
+library(tm)
+library(igraph)
+#library(regexSelect)
+library(mclust)
+library(tictoc)
+#library(RSQLite)
+library(digest)
+#install.packages("reshape")
+library(reshape)
+
+## Clear and working directory
+
+setwd("") # insert own file directory
+
+
+#clear environment
+rm(list=ls())
+
+#set seed
+set.seed(2109)
+
+#check memory limit
+memory.limit()
+memory.limit(size = 20000)
+```
+
+# Building co-occurrence matrices
+
+#females
+
+```{r}
+#sub-corpus
+load("corp_wom.Rda")
+#feature co-occurrence matrix
+wom_fcm <- fcm(corp_wom, context = 'window', 
+               window = 7)
+#save co-occurrence matrix
+save(wom_fcm, file="wom_fcm.Rda")
+
+```
+
+#male
+
+```{r}
+#sub-coprus
+load("corp_men.Rda")
+#feature co-occurrence matrix
+men_fcm <- fcm(corp_men, context = 'window', 
+               window = 7)
+#save co-occurrence matrix
+save(men_fcm, file="men_fcm.Rda")
+
+```
+
+#Built semantic networks
+
+```{r}
+#################
+#####FEMALES#####
+#################
+load("wom_fcm.Rda")
+
+
+#Built Igraph network
+adj_wom <- fcm_select(wom_fcm, valuetype = 'fixed')
+wom_graph <- graph_from_adjacency_matrix(adj_wom, weighted = NULL,
+                                         mode = c("undirected"), diag = FALSE)
+
+#save
+save(wom_graph, file="wom_graph.Rda")
+
+load("wom_graph.Rda")
+#check edge density
+edge_density(wom_graph, loops=F) #0.002311603
+
+#diameter is the length of the longest path (in number of edges) between two nodes
+diameter(wom_graph, directed=FALSE, weights=NA) #5
+
+#mean_distance is the average number of edges between any two nodes in the network.
+mean_distance(wom_graph, directed=FALSE) #2.574375
+
+wom_graph$damen
+#################
+######MALES######
+#################
+load("men_fcm.Rda")
+
+
+adj_men <- fcm_select(men_fcm, valuetype = 'fixed')
+men_graph <- graph_from_adjacency_matrix(adj_men, weighted = NULL,
+                                         mode = c("undirected"), diag = FALSE)
+
+#save
+save(men_graph, file="men_graph.Rda")
+
+load("men_graph.Rda")
+#check edge density
+edge_density(men_graph, loops=F) #0.002061899
+
+#diameter is the length of the longest path (in number of edges) between two nodes
+tic()
+diameter(men_graph, directed=FALSE, weights=NA) #4
+toc()
+
+#mean_distance is the average number of edges between any two nodes in the network.
+mean_distance(men_graph, directed=FALSE) #2.570824
+
+
+
+```
+
+#Check if damen there to belittle 
+```{r}
+load("wom_fcm.Rda")
+load("men_fcm.Rda")
+pattern_damen <- c("damen", "herren", "ruhe", "beruhigen", "kollegen", "kolleginnen")
+wom_d_h_combis <- fcm_select(wom_fcm, pattern = pattern_damen) # 5214 times damen and herren said together
+
+men_d_h_combis <- fcm_select(men_fcm, pattern = pattern_damen) # 10358 times damen and herren said tigether
+
+load("wom_full.Rda")
+#5277 times damen, 5238 times herren
+
+load("men_full.Rda")
+#10521 times damen, 10386 times herren
+
+
+
+```
+
+#plots
+#females
+
+#German 
+```{r}
+load("wom_fcm.Rda")
+feat_wom_G <- names(topfeatures(wom_fcm, 50)) #topfeatures() returns the most frequently co-occurring words
+fcmat_wom_50_G <- fcm_select(wom_fcm, pattern = feat_wom_G)
+
+
+fcmat_wom_50_G@Dimnames <-
+  list(
+    features = c(
+      "Kolleginnen",
+      "Kollegen",
+      "vielen",
+      "ja",
+      "müssen",
+      "Dank",
+      "Frau",
+      "Bundesregierung",
+      "möchte",
+      "Präsidentin",
+      "immer",
+      "Deutschland",
+      "unsere",
+      "Menschen",
+      "Land",
+      "wirklich",
+      "viele",
+      "natürlich",
+      "Euro",
+      "Jahr",
+      "leben",
+      "brauchen",
+      "Kollege",
+      "wurde",
+      "Linke",
+      "Drucksache",
+      "Bündnis",
+      "stimmen",
+      "Ausschuss",
+      "wer",
+      "unserem",
+      "stimmt",
+      "dagegen",
+      "beschlossen",
+      "Beratung",
+      "enthält",
+      "endlich",
+      "glaube",
+      "Gesetz",
+      "Frauen",
+      "Kinder",
+      "Kommunen",
+      "Gesetzentwurf",
+      "Milliarden",
+      "Millionen",
+      "darf",
+      "diejenigen",
+      "angenommen",
+      "Flüchtlinge",
+      "Beschlussempfehlung"
+    ),
+    features =  c(
+      "Kolleginnen",
+      "Kollegen",
+      "vielen",
+      "ja",
+      "müssen",
+      "Dank",
+      "Frau",
+      "Bundesregierung",
+      "möchte",
+      "Präsidentin",
+      "immer",
+      "Deutschland",
+      "unsere",
+      "Menschen",
+      "Land",
+      "wirklich",
+      "viele",
+      "natürlich",
+      "Euro",
+      "Jahr",
+      "leben",
+      "brauchen",
+      "Kollege",
+      "wurde",
+      "Linke",
+      "Drucksache",
+      "Bündnis",
+      "stimmen",
+      "Ausschuss",
+      "wer",
+      "unserem",
+      "stimmt",
+      "dagegen",
+      "beschlossen",
+      "Beratung",
+      "enthält",
+      "endlich",
+      "glaube",
+      "Gesetz",
+      "Frauen",
+      "Kinder",
+      "Kommunen",
+      "Gesetzentwurf",
+      "Milliarden",
+      "Millionen",
+      "darf",
+      "diejenigen",
+      "angenommen",
+      "Flüchtlinge",
+      "Beschlussempfehlung"
+    )
+  )
+
+#size <- log(colSums(dfm_select(wom_fcm, feat_wom_G)))
+#ploi_wom_G <- textplot_network(fcmat_wom_50_G, min_freq = 0.8, 
+ #                              vertex_size = size / max(size)* 3, 
+  #                             edge_color = "darkslategrey")
+
+
+
+ploi_wom_G <- textplot_network(fcmat_wom_50_G, min_freq = 0.8, edge_color = "darkslategrey")
+ploi_wom_G
+
+
+
+
+#save
+ggsave(ploi_wom_G, filename = "network_wom_German.jpg",
+       device = "jpg", width = 20 , height = 14,
+       units = "cm", dpi = 500)
+```
+
+#English
+```{r}
+load("wom_fcm.Rda")
+feat_wom <- names(topfeatures(wom_fcm, 50)) #topfeatures() returns the most frequently co-occurring words
+feat_wom
+fcmat_wom_50 <- fcm_select(wom_fcm, pattern = feat_wom)
+
+
+fcmat_wom_50@Dimnames <- list(features = c("colleagues (female)", "colleagues (male)", "many [1]", "yes", "have to", "thanks", "Mrs./women",  "government", "want", "president (female)",  "always", "Germany", "our [1]", "people", "country", "really", "many [2]", "natural", "euro", "year", "live",  "need", "colleague (male)", "was", "left",  "official documents", "alliance", "vote [1]", "committee","who", "our [2]", "vote [2]", "dissent", "decided", "consultation", "abstain", "finally", "believe", "act", "women", "children", "municipalities", "bill", "billions", "millions", "allowed", "those", "adopted", "refugees", 
+"recom. resolution"), 
+                              features =  c("colleagues (female)", "colleagues (male)", "many [1]", "yes", "have to", "thanks", "Mrs./women",  "government", "want", "president (female)",  "always", "Germany", "our [1]", "people", "country", "really", "many [2]", "natural", "euro", "year", "live",  "need", "colleague (male)", "was", "left",  "official documents", "alliance", "vote [1]", "committee","who", "our [2]", "vote [2]", "dissent", "decided", "consultation", "abstain", "finally", "believe", "act", "women", "children", "municipalities", "bill", "billions", "millions", "allowed", "those", "adopted", "refugees", 
+"recom. resolution"))
+
+
+
+#size <- log(colSums(dfm_select(wom_fcm, feat_wom)))
+ploi1 <- textplot_network(fcmat_wom_50, min_freq = 0.8,
+                          edge_color = "darkslategrey")
+ploi1
+
+
+
+#save
+ggsave(ploi1, filename = "network_wom_eng_20201012.jpg",
+       device = "jpg", width = 20 , height = 14,
+       units = "cm", dpi = 500)
+```
+
+#males
+
+#German
+```{r}
+load("men_fcm.Rda")
+feat_men <- names(topfeatures(men_fcm, 50)) #topfeatures() returns the most frequntly co-occuring words
+fcmat_men_50_G <- fcm_select(men_fcm, pattern = feat_men)
+
+
+fcmat_men_50_G@Dimnames <-
+  list(
+    features = c(
+      "Kollegen",
+      "müssen",
+      "gibt",
+      "Menschen",
+      "immer",
+      "dafür",
+      "Euro",
+      "sagen",
+      "liebe",
+      "gut",
+      "tun",
+      "Kolleginnen",
+      "ja",
+      "Kollege",
+      "Präsident",
+      "möchte",
+      "stellen",
+      "deutlich",
+      "letzten",
+      "darauf",
+      "gerade",
+      "Bundesregierung",
+      "deswegen",
+      "natürlich",
+      "wichtig",
+      "Union",
+      "Antrag",
+      "Grünen",
+      "wurde",
+      "sage",
+      "darum",
+      "Kollegin",
+      "wäre",
+      "reden",
+      "gar",
+      "Recht",
+      "Jahr",
+      "glaube",
+      "Millionen",
+      "Thema",
+      "gesagt",
+      "Geld",
+      "Beispiel",
+      "Gesetz",
+      "richtig",
+      "Vizepräsidentin",
+      "Bund",
+      "Gesetzentwurf",
+      "Kommunen",
+      "zahlen"
+    ),
+    features =  c(
+      "Kollegen",
+      "müssen",
+      "gibt",
+      "Menschen",
+      "immer",
+      "dafür",
+      "Euro",
+      "sagen",
+      "liebe",
+      "gut",
+      "tun",
+      "Kolleginnen",
+      "ja",
+      "Kollege",
+      "Präsident",
+      "möchte",
+      "stellen",
+      "deutlich",
+      "letzten",
+      "darauf",
+      "gerade",
+      "Bundesregierung",
+      "deswegen",
+      "natürlich",
+      "wichtig",
+      "Union",
+      "Antrag",
+      "Grünen",
+      "wurde",
+      "sage",
+      "darum",
+      "Kollegin",
+      "wäre",
+      "reden",
+      "gar",
+      "Recht",
+      "Jahr",
+      "glaube",
+      "Millionen",
+      "Thema",
+      "gesagt",
+      "Geld",
+      "Beispiel",
+      "Gesetz",
+      "richtig",
+      "Vizepräsidentin",
+      "Bund",
+      "Gesetzentwurf",
+      "Kommunen",
+      "zahlen"
+    )
+  )
+
+
+ploi_men_G <- textplot_network(fcmat_men_50_G, min_freq = 0.8, 
+                          edge_color = "darkslategrey")
+ploi_men_G 
+#save
+ggsave(ploi_men_G, filename = "ploi_men_G.jpg",
+       device = "jpg", width = 20 , height = 14,
+       units = "cm"
+       , dpi = 500)
+```
+
+#English
+```{r}
+load("men_fcm.Rda")
+feat_men <- names(topfeatures(men_fcm, 50)) #topfeatures() returns the most frequntly co-occuring words
+feat_men
+fcmat_men_50 <- fcm_select(men_fcm, pattern = feat_men)
+
+fcmat_men_50@Dimnames <-
+  list(
+    features = c(
+      "colleagues (male)",
+      "have to",
+      "give",
+      "people",
+      "always",
+      "in favor",
+      "euro",
+      "saying [1]",
+      "dear",
+      "good",
+      "doing",
+      "colleagues (female)",
+      "yes",
+      "colleague (male)",
+      "president (male)",
+      "want",
+      "provide",
+      "clear",
+      "last",
+      "then",
+      "just",
+      "government",
+      "therefore [1]",
+      "natural",
+      "important",
+      "union",
+      "request",
+      "greens",
+      "was",
+      "saying [2]",
+      "therefore [2]",
+      "colleague (female)",
+      "would be",
+      "talking",
+      "even",
+      "law",
+      "year",
+      "believe",
+      "millions",
+      "topic",
+      "said",
+      "money",
+      "example",
+      "act",
+      "correct",
+      "vice-president (female)",
+      "federation",
+      "bill",
+      "municipalities",
+      "paying"
+    ),
+    features =  c(
+      "colleagues (male)",
+      "have to",
+      "give",
+      "people",
+      "always",
+      "in favor",
+      "euro",
+      "saying [1]",
+      "dear",
+      "good",
+      "doing",
+      "colleagues (female)",
+      "yes",
+      "colleague (male)",
+      "president (male)",
+      "want",
+      "provide",
+      "clear",
+      "last",
+      "then",
+      "just",
+      "government",
+      "therefore [1]",
+      "natural",
+      "important",
+      "union",
+      "request",
+      "greens",
+      "was",
+      "saying [2]",
+      "therefore [2]",
+      "colleague (female)",
+      "would be",
+      "talking",
+      "even",
+      "law",
+      "year",
+      "believe",
+      "millions",
+      "topic",
+      "said",
+      "money",
+      "example",
+      "act",
+      "correct",
+      "vice-president (female)",
+      "federation",
+      "bill",
+      "municipalities",
+      "paying"
+    )
+  )
+
+
+
+ploi2 <- textplot_network(fcmat_men_50, min_freq = 0.8,  
+                          edge_color = "darkslategrey")
+ploi2 
+
+#save
+ggsave(ploi2, filename = "ploi_men_eng_20201012.jpg",
+       device = "jpg", width = 20 , height = 14,
+       units = "cm"
+       , dpi = 500)
+```
+
+#Key words - hub centrality scores - with addressing
+
+```{r}
+#################
+#####FEMALES#####
+#################
+
+load("wom_graph.Rda")
+
+#hub centrality
+hub_wom <- as.data.frame(hub_score(wom_graph))
+#include words in data frame
+hub_wom$words <- rownames(hub_wom)y
+
+#rearange order
+hub_wom <- hub_wom[order(-hub_wom$vector),]
+#select 15 most important keywords
+hub_wom_15 <- hub_wom[1:15,]
+
+#################
+######MALES######
+#################
+
+load("men_graph.Rda")
+
+#hub centrality
+hub_men <- as.data.frame(hub_score(men_graph))
+#include words in data frame
+hub_men$words <- rownames(hub_men)
+
+#rearange order
+hub_men <- hub_men[order(-hub_men$vector),]
+#select 15 most important keywords
+hub_men_15 <- hub_men[1:15,]
+
+```
+
+##excluding forms of adressing _oa
+
+```{r}
+#pattern to delete
+address <-
+  c(
+    "liebe",
+    "kollegen",
+    "kolleginnen",
+    "sehr",
+    "geehrte",
+    "damen",
+    "herren",
+    "vielen",
+    "dank"
+  )
+
+#################
+#####FEMALES#####
+#################
+load("wom_fcm.Rda")
+wom_fcm_oa <- fcm_remove(wom_fcm, pattern = address)
+save(wom_fcm_oa, file="wom_fcm_oad.Rda")
+
+#network
+adj_wom_oa <- fcm_select(wom_fcm_oa, valuetype = 'fixed')
+wom_graph_oa <- graph_from_adjacency_matrix(adj_wom_oa, weighted = NULL,
+                                            mode = c("undirected"), diag = FALSE)
+save(wom_graph_oa, file="wom_graph_oad.Rda")
+
+
+#################
+######MALES######
+#################
+load("men_fcm.Rda")
+men_fcm_oa <- fcm_remove(men_fcm, pattern = address)
+save(men_fcm_oa, file="men_fcm_oad.Rda")
+
+#network
+adj_men_oa <- fcm_select(men_fcm_oa, valuetype = 'fixed')
+men_graph_oa <- graph_from_adjacency_matrix(adj_men_oa, weighted = NULL,
+                                            mode = c("undirected"), diag = FALSE)
+save(men_graph_oa, file="men_graph_oad.Rda")
+
+```
+
+#key words - hub scores - without addressing _oa
+
+```{r}
+#################
+#####FEMALES#####
+#################
+
+load("wom_graph_oad.Rda")
+#simplify 
+
+#hub centrality
+hub_wom_oa <- as.data.frame(hub_score(wom_graph_oa))
+#include words in data frame
+hub_wom_oa$words <- rownames(hub_wom_oa)
+
+#rearange order
+hub_wom_oa <- hub_wom_oa[order(-hub_wom_oa$vector),]
+#select 15 most important keywords
+hub_wom_oa_15 <- hub_wom_oa[1:15,]
+
+hub_wom_oa_15$words
+
+#################
+######MALES######
+#################
+
+
+load("men_graph_oad.Rda")
+
+#hub centrality
+hub_men_oa <- as.data.frame(hub_score(men_graph_oa))
+#include words in data frame
+hub_men_oa$words <- rownames(hub_men_oa)
+
+#rearange order
+hub_men_oa <- hub_men_oa[order(-hub_men_oa$vector),]
+#select 15 most important keywords
+hub_men_oa_15 <- hub_men_oa[1:15,]
+hub_men_oa_15$words
+
+####################
+#######GRAPHS#######
+####################
+
+#################
+#####FEMALES#####
+#################
+
+
+#include translation
+hub_wom_oa_15$labels <-
+  c(
+    "wer (who)",
+    "stimmt (vote*)",
+    "Beschlussempfehlung (recom.
+                          resolution)",
+    "Drucksache (official documents)",
+    "dagegen (dissent)",
+    "Fraktion (parliamentary group)",
+    "Gr?nen (greens)",
+    "stimmen (vote*)",
+    "enth?lt (abstain)",
+    "B?ndnis (alliance)",
+    "Linke (left)",
+    "Gesetzentwurf (bill)",
+    "Beratung (consultation)",
+    "Antrag (request)",
+    "angenommen (adopted)"
+  )
+
+
+write.xlsx(hub_wom_oa_15$labels, file = "translation.xlsx", append)
+
+#Hubs females
+graph_hub_wom <- ggplot(hub_wom_oa_15, aes(x=reorder(labels, vector), y=vector)) +
+  theme_set(theme_classic()) +
+  theme(axis.text.y = element_text(size = 10)) +
+  geom_bar(stat="identity", width = 0.7, fill = "darkgrey",
+           position=position_dodge()) +
+  coord_flip() + 
+  labs(x = "Words", y = "Hub centrality", 
+       title ="Women")
+
+
+graph_hub_wom  
+ggsave(graph_hub_wom, filename = "wom_hub.jpg", device = "jpg", width = 10, height = 14, units = "cm", dpi = 500)
+
+#################
+######MALES######
+#################
+
+
+#include translation
+hub_men_oa_15$labels <-
+  c(
+    "müssen (have to)",
+    "mehr (more)",
+    "Deutschland (Germany)",
+    "Menschen (people)",
+    "schon (already)",
+    "gibt (give*)",
+    "sagen (saying)",
+    "Euro (euro)",
+    "geht (go*)",
+    "heute (today)",
+    "Herr (Mr.)",
+    "ganz (completely)",
+    "dafür (in favor)",
+    "immer (always)",
+    "Frage (question)"
+  )
+
+
+#hubs males
+graph_hub_men <- ggplot(hub_men_oa_15, aes(x=reorder(labels, vector), y=vector)) +
+  theme_set(theme_classic()) +
+  theme(axis.text.y = element_text(size = 10)) +            
+  geom_bar(stat="identity", width = 0.7, fill =  "darkslategrey",
+           position=position_dodge()) +
+  coord_flip() + 
+  labs(x = "Words", y = "Hub centrality", 
+       title ="Men")
+
+
+graph_hub_men  
+ggsave(graph_hub_men, filename = "men_hub.jpg", device = "jpg", width = 9, height = 14, units = "cm",dpi = 500)
+```
+
+
+#exclude female vice presidents _ovp
+
+```{r}
+#Ulla Schmidt (11002019)
+#Edelgard Bulmahn (11000305)
+#Petra Pau (11003206)
+#Claudia Roth (11003212)
+
+load("wom_fcm.Rda")
+load("corp_wom.Rda")
+#IDs of vice presidents
+ID_vp <- c("11002019", "11000305", "11003206","11003212")
+
+#exclude vice presidents from female corpus
+corp_wom_ovp <- corpus_subset(corp_wom, ID!=ID_vp)
+
+#feature co-occurrence matrix
+wom_fcm_ovp <- fcm(corp_wom_ovp, context = 'window', 
+                   window = 7)
+
+#save
+save(wom_fcm_ovp, file="wom_fcm_ovp.Rda")
+
+#Built Igraph network
+adj_wom_ovp <- fcm_select(wom_fcm_ovp, valuetype = 'fixed')
+wom_graph_ovp <- graph_from_adjacency_matrix(adj_wom_ovp, weighted = NULL,
+                                             mode = c("undirected"), diag = FALSE)
+
+
+#save
+save(wom_graph_ovp, file="wom_graph_ovp.Rda")
+```
+
+#exclude female vice presidents _ovp also Michaela Noll
+
+```{r}
+#Ulla Schmidt (11002019)
+#Edelgard Bulmahn (11000305)
+#Petra Pau (11003206)
+#Claudia Roth (11003212)
+
+load("wom_fcm.Rda")
+load("corp_wom.Rda")
+#IDs of vice presidents
+ID_vp <- c("11002019", "11000305", "11003206","11003212", "11003645")
+
+#exclude vice presidents from female corpus
+corp_wom_ovp <- corpus_subset(corp_wom, ID!=ID_vp)
+
+#feature co-occurrence matrix
+wom_fcm_ovp_noll <- fcm(corp_wom_ovp, context = 'window', 
+                   window = 7)
+
+#save
+save(wom_fcm_ovp_noll, file="wom_fcm_ovp_noll.Rda")
+
+#Built Igraph network
+adj_wom_ovp <- fcm_select(wom_fcm_ovp_noll, valuetype = 'fixed')
+wom_graph_ovp_noll <- graph_from_adjacency_matrix(adj_wom_ovp, weighted = NULL,
+                                             mode = c("undirected"), diag = FALSE)
+
+
+#save
+save(wom_graph_ovp_noll, file="wom_graph_ovp_noll.Rda")
+```
+
+#plot without vice presidents _ovp
+
+```{r}
+load("wom_fcm_ovp.Rda")
+#plot on female network
+feat_wom_ovp <- names(topfeatures(wom_fcm_ovp, 50)) #topfeatures() returns the most frequntly co-occuring words<
+fcmat_wom_50_ovp <- fcm_select(wom_fcm_ovp, pattern = feat_wom_ovp)
+
+#fcmat_wom_50_ovp@Dimnames
+fcmat_wom_50_ovp@Dimnames <-
+  list(
+    features = c(
+      "Kolleginnen",
+      "Kollegen",
+      "vielen",
+      "ja",
+      "müssen",
+      "Dank",
+      "Frau",
+      "Bundesregierung",
+      "möchte",
+      "Präsidentin",
+      "immer",
+      "Deutschland",
+      "unsere",
+      "Menschen",
+      "Land",
+      "wirklich",
+      "viele" ,
+      "natürlich",
+      "Euro",
+      "Jahr",
+      "deswegen",
+      "Geld",
+      "leben",
+      "brauchen",
+      "Kollege",
+      "wurde",
+      "Linke",
+      "Drucksache",
+      "Bündnis",
+      "Ausschuss",
+      "gar",
+      "wer",
+      "unserem",
+      "stimmt",
+      "dagegen",
+      "Beratung",
+      "bereits",
+      "endlich",
+      "glaube",
+      "Gesetz",
+      "Frauen",
+      "Kinder",
+      "Kommunen",
+      "Gesetzentwurf",
+      "Milliarden",
+      "millionen",
+      "darf",
+      "Flüchtlinge",
+      "angenommen",
+      "Beschlussempfehlung"
+    ),
+    features =  c(
+      "Kolleginnen",
+      "Kollegen",
+      "vielen",
+      "ja",
+      "müssen",
+      "Dank",
+      "Frau",
+      "Bundesregierung",
+      "möchte",
+      "Präsidentin",
+      "immer",
+      "Deutschland",
+      "unsere",
+      "Menschen",
+      "Land",
+      "wirklich",
+      "viele" ,
+      "natürlich",
+      "Euro",
+      "Jahr",
+      "deswegen",
+      "Geld",
+      "leben",
+      "brauchen",
+      "Kollege",
+      "wurde",
+      "Linke",
+      "Drucksache",
+      "Bündnis",
+      "Ausschuss",
+      "gar",
+      "wer",
+      "unserem",
+      "stimmt",
+      "dagegen",
+      "Beratung",
+      "bereits",
+      "endlich",
+      "glaube",
+      "Gesetz",
+      "Frauen",
+      "Kinder",
+      "Kommunen",
+      "Gesetzentwurf",
+      "Milliarden",
+      "millionen",
+      "darf",
+      "Flüchtlinge",
+      "angenommen",
+      "Beschlussempfehlung"
+    )
+  )
+
+
+graph_wom_ovp <- textplot_network(fcmat_wom_50_ovp, min_freq = 0.8, 
+                                  edge_color = "darkslategrey")
+graph_wom_ovp
+
+
+#save
+ggsave(graph_wom_ovp, filename = "ploi_wom_ovp.jpg",
+       device = "jpg", width = 20 , height = 14,
+       units = "cm", dpi = 500)
+
+```
+
+#plot without vice presidents _ovp without Michaela Noll
+
+```{r}
+load("wom_fcm_ovp_noll.Rda")
+#plot on female network
+feat_wom_ovp <- names(topfeatures(wom_fcm_ovp_noll, 50)) #topfeatures() returns the most frequntly co-occuring words
+fcmat_wom_50_ovp <- fcm_select(wom_fcm_ovp_noll, pattern = feat_wom_ovp)
+
+graph_wom_ovp_noll <- textplot_network(fcmat_wom_50_ovp, min_freq = 0.8, 
+                                  edge_color = "darkslategrey")
+graph_wom_ovp_noll
+
+
+#save
+ggsave(graph_wom_ovp_noll, filename = "ploi_wom_ovp_noll.jpg",
+       device = "jpg", width = 20 , height = 14,
+       units = "cm", dpi = 500)
+
+```
+
+#keywords without vice presidents with addressing _ovp
+
+```{r}
+
+#load
+load("wom_graph_ovp.Rda")
+
+
+#hub centrality
+hub_wom_ovp <- as.data.frame(hub_score(wom_graph_ovp))
+#include words in data frame
+hub_wom_ovp$words <- rownames(hub_wom_ovp)
+
+#rearange order
+hub_wom_ovp <- hub_wom_ovp[order(-hub_wom_ovp$vector),]
+#select 15 most important keywords
+hub_wom_ovp_25 <- hub_wom_ovp[1:25,]
+
+####################
+#######GRAPHS#######
+####################
+
+
+
+hub_wom_ovp_25$labels <-
+  c(
+    "Kollegen (male: colleagues)",
+    "Kolleginnen (female: colleagues)",
+    "liebe (dear)",
+    "Frau (woman/Mrs.)",
+    "Herr (Mr.)",
+    "Präsidentin (female: president)",
+    "vielen (very)",
+    "Dank (thanks)",
+    "mehr (more)",
+    "müssen (have to)",
+    "Damen (ladies)",
+    "Menschen (people)",
+    "Herren (gentlemen)",
+    "schon (already)",
+    "wer (who)",
+    "heute (today)",
+    "gibt (give*)",
+    "ganz (completely)",
+    "geehrte (dear)",
+    "Grüne (greens)",
+    "Fraktion (parliamentary group)",
+    "sagen (saying)",
+    "immer (always)",
+    "geht (go*)",
+    "ja (yes)"
+  )
+
+
+
+#grpah on hubs without female vice presidents
+graph_hub_wom_ovp <- ggplot(hub_wom_ovp_25, aes(x=reorder(labels, vector), y=vector)) +
+  theme_set(theme_classic()) +
+  theme(axis.text.y = element_text(size = 10)) +
+  geom_bar(stat="identity", width = 0.7, fill =  "darkgrey",
+           position=position_dodge()) +
+  coord_flip() + 
+  labs(x = "Words", y = "Hub centrality", 
+       title ="Women without vice presidents")
+
+
+graph_hub_wom_ovp
+ggsave(graph_hub_wom_ovp, filename = "graph_hub_ovp.jpg", device = "jpg", width = 14, height = 20, units = "cm", dpi = 500)
+
+```
+#keywords without vice presidents with addressing _ovp without Michaela Noll
+
+```{r}
+
+#load
+load("wom_graph_ovp_noll.Rda")
+
+
+#hub centrality
+hub_wom_ovp <- as.data.frame(hub_score(wom_graph_ovp_noll))
+#include words in data frame
+hub_wom_ovp$words <- rownames(hub_wom_ovp)
+
+#rearange order
+hub_wom_ovp <- hub_wom_ovp[order(-hub_wom_ovp$vector),]
+#select 15 most important keywords
+hub_wom_ovp_25 <- hub_wom_ovp[1:25,]
+
+```
+
+#keywords without vice presidents without addressing _oa_ovp
+
+```{r}
+#pattern to delete
+address <-
+  c("liebe",
+    "kollegen",
+    "kolleginnen",
+    "sehr",
+    "geehrte",
+    "damen",
+    "herren",
+    "vielen",
+    "dank"
+  )
+
+#################
+#####FEMALES#####
+#################
+load("wom_fcm_ovp.Rda")
+wom_fcm_oa_ovp <- fcm_remove(wom_fcm_ovp, pattern = address)
+save(wom_fcm_oa_ovp, file="wom_fcm_oa_ovp.Rda")
+
+#network
+adj_wom_oa_ovp <- fcm_select(wom_fcm_oa_ovp, valuetype = 'fixed')
+wom_graph_oa_ovp <- graph_from_adjacency_matrix(adj_wom_oa_ovp, weighted = NULL,
+                                                mode = c("undirected"), diag = FALSE)
+save(wom_graph_oa_ovp, file="wom_fcm_oa_ovp.Rda")
+
+
+
+#hub centrality
+hub_wom_oa_ovp <- as.data.frame(hub_score(wom_graph_oa_ovp))
+#include words in data frame
+hub_wom_oa_ovp$words <- rownames(hub_wom_oa_ovp)
+
+#rearange order
+hub_wom_oa_ovp <- hub_wom_oa_ovp[order(-hub_wom_oa_ovp$vector),]
+#select 15 most important keywords
+hub_wom_oa_ovp_15 <- hub_wom_oa_ovp[1:15,]
+
+
+####################
+#######GRAPHS#######
+####################
+hub_wom_oa_ovp_15$labels <-
+  c(
+    "wer (who)",
+    "stimmt (vote*)",
+    "mehr (more)",
+    "müssen (have to)",
+    "Menschen (people)",
+    "schon (already)",
+    "Fraktion (parliamentary group)",
+    "Grünen (greens)",
+    "Drucksache (official documents)",
+    "gibt (give*)",
+    "Beschlusssache (recommended resolution)",
+    "dagegen (dissent)",
+    "Gesetzentwurf (bill)",
+    "ganz (completely)",
+    "dafür (in favor)"
+  )
+
+
+
+#hubs males
+graph_hub_ovp_oa <- ggplot(hub_wom_oa_ovp_15, aes(x=reorder(labels, vector),
+                                                  y=vector)) +
+  theme_set(theme_classic()) +
+  theme(axis.text.y = element_text(size = 10)) +
+  geom_bar(stat="identity", width = 0.7, fill = "darkgrey",
+           position=position_dodge()) +
+  coord_flip() + 
+  labs(x = "Words", y = "Hub centrality", 
+       title ="Women without vice presidents")
+
+
+graph_hub_ovp_oa
+
+ggsave(graph_hub_ovp_oa, filename = "graph_hub_ovp_oa.jpg", device = "jpg", width = 18, height = 14, units = "cm", dpi = 500)
+
+
+
+
+```
+#keywords without vice presidents without addressing _oa_ovp without Michaela Noll
+
+```{r}
+#pattern to delete
+address <-
+  c(
+    "liebe",
+    "kollegen",
+    "kolleginnen",
+    "sehr",
+    "geehrte",
+    "damen",
+    "herren",
+    "vielen",
+    "dank"
+  )
+
+#################
+#####FEMALES#####
+#################
+load("wom_fcm_ovp_noll.Rda")
+wom_fcm_oa_ovp_noll <- fcm_remove(wom_fcm_ovp_noll, pattern = address)
+save(wom_fcm_oa_ovp_noll, file="wom_fcm_oa_ovp_noll.Rda")
+
+#network
+adj_wom_oa_ovp <- fcm_select(wom_fcm_oa_ovp_noll, valuetype = 'fixed')
+wom_graph_oa_ovp_noll <- graph_from_adjacency_matrix(adj_wom_oa_ovp, weighted = NULL,
+                                                mode = c("undirected"), diag = FALSE)
+save(wom_graph_oa_ovp_noll, file="wom_fcm_oa_ovp_noll.Rda")
+
+
+
+#hub centrality
+hub_wom_oa_ovp <- as.data.frame(hub_score(wom_graph_oa_ovp_noll))
+#include words in data frame
+hub_wom_oa_ovp$words <- rownames(hub_wom_oa_ovp)
+
+#rearange order
+hub_wom_oa_ovp <- hub_wom_oa_ovp[order(-hub_wom_oa_ovp$vector),]
+#select 15 most important keywords
+hub_wom_oa_ovp_15 <- hub_wom_oa_ovp[1:15,]
+
+
+
+
+
+```
+
+##calculate hub centralities for all female politicians
+
+```{r eval=false}
+load("Stammdaten18.Rda")
+#################
+#####FEMALES#####
+#################
+load("wom_fcm.Rda")
+
+#to get only ID of females
+total_wom <- subset(total18, GESCHLECHT=="weiblich")
+
+load("corp_wom.Rda")
+IDs <- unique(corp_wom$documents$ID)
+
+load("dtm_wom.Rda")
+
+
+#put individual data to data frame in a loop
+q <- corpus_subset(corp_wom, (ID==IDs[1])) # subset corpus for ID
+p <- fcm(q, context = 'window', window = 7)
+w <- fcm_select(p, valuetype = 'fixed')
+o <- graph_from_adjacency_matrix(w, weighted = NULL,
+                                 mode = c("undirected"), diag = FALSE)
+hub <- as.data.frame(hub_score(o))
+hub_full <- hub[c(1)]
+names(hub_full)[1] <- IDs[1]
+hub_wom_i <- transpose(hub_full)
+#keep row and column names
+colnames(hub_wom_i) <- rownames(hub_full)
+rownames(hub_wom_i) <- colnames(hub_full)
+
+
+for (i in c(2:length(IDs))) {
+  tic()
+  q <- corpus_subset(corp_wom, (ID==IDs[i])) # subset corpus for ID
+  p <- fcm(q, context = 'window', window = 7)
+  w <- fcm_select(p, valuetype = 'fixed')
+  o <- graph_from_adjacency_matrix(w, weighted = NULL,
+                                   mode = c("undirected"), diag = FALSE)
+  hub <- as.data.frame(hub_score(o))
+  y <- hub[c(1)]
+  names(y)[1] <- IDs[i]
+  hub_2 <- transpose(y)
+  #keep row and column names
+  colnames(hub_2) <- rownames(y)
+  rownames(hub_2) <- colnames(y)
+  
+  hub_wom_i <- full_join(hub_wom_i, hub_2)
+  
+  
+  
+  print(i)
+  toc()
+}
+
+save(hub_wom_i, file="hub_wom_i_45.Rda")
+
+
+save(hub_wom_i, file="hub_wom_i.Rda")
+beep("complete")
+
+
+load("hub_wom_i.Rda")
+head(hub_wom_i)
+```
+
+##calculate hub centralities for all male politicians
+
+```{r eval=FALSE echo=FALSE}
+load("Stammdaten18.Rda")
+#################
+######MALES######
+#################
+
+load("men_fcm.Rda")
+
+#to get only ID of females
+total_men <- subset(total18, GESCHLECHT=="männlich")
+
+load("corp_men.Rda")
+IDs <- unique(corp_men$documents$ID)
+
+load("dtm_men.Rda")
+
+
+#put individual data to data frame in a loop
+
+
+q <- corpus_subset(corp_men, (ID==IDs[1])) # subset corpus for ID
+p <- fcm(q, context = 'window', window = 7)
+w <- fcm_select(p, valuetype = 'fixed')
+o <- graph_from_adjacency_matrix(w, weighted = NULL,
+                                 mode = c("undirected"), diag = FALSE)
+hub <- as.data.frame(hub_score(o))
+hub_full <- hub[c(1)]
+names(hub_full)[1] <- IDs[1]
+hub_men_i <- transpose(hub_full)
+#keep row and column names
+colnames(hub_men_i) <- rownames(hub_full)
+rownames(hub_men_i) <- colnames(hub_full)
+
+
+for (i in c(1:length(IDs))) {
+  tic()
+  q <- corpus_subset(corp_men, (ID==IDs[i])) # subset corpus for ID
+  p <- fcm(q, context = 'window', window = 7)
+  t <- fcm_keep(p, pattern = intersect_words)
+  w <- fcm_select(t, valuetype = 'fixed')
+  o <- graph_from_adjacency_matrix(w, weighted = NULL,
+                                   mode = c("undirected"), diag = FALSE)
+  hub <- as.data.frame(hub_score(o))
+  y <- hub[c(1)]
+  names(y)[1] <- IDs[i]
+  hub_2 <- transpose(y)
+  #keep row and column names
+  colnames(hub_2) <- rownames(y)
+  rownames(hub_2) <- colnames(y)
+  
+  hub_men_i <- full_join(hub_men_i, hub_2)
+  
+  
+  
+  print(i)
+  toc()
+}
+
+#save
+save(hub_men_i, file="hub_men_i_full.Rda")
+#beep("complete")
+
+##Note: I cut this loop into pieces to reduce computing time. First, 1 to 95, then 96 to 211, then 211 to the end. I joint them by using full_join.
+```
+
+## Hub centralities of individuals
+
+```{r}
+#################
+#####FEMALES#####
+#################
+load("hub_wom_i.Rda")
+head(hub_wom_i)
+max(hub_wom_i$wer,na.rm = TRUE)
+summary(hub_wom_i$wer,na.rm = TRUE)
+table(hub_wom_i$wer) #4 people have "wer" as their keyword. Check who:
+
+p_wer <- c("wer")
+wer <- hub_wom_i[p_wer] # 3 4 5 6 
+load("corp_wom.Rda")
+IDs <- unique(corp_wom$documents$ID)
+IDs[3:6] #  "11000305" "11002019" "11003206" "11003212"
+#Ulla Schmidt (11002019)
+#Edelgard Bulmahn (11000305)
+#Petra Pau (11003206)
+#Claudia Roth (11003212)
+
+
+summary(hub_wom_i$stimmt) #no one as their 1, max. 0.89 - for full: 0.797
+table(hub_wom_i$stimmt)
+
+summary(hub_wom_i$liebe)
+table(hub_wom_i$liebe) #25 have it as their 1
+
+summary(hub_wom_i$frau)
+table(hub_wom_i$frau) #6 as their 1 
+
+summary(hub_wom_i$mehr) #mean 0.39
+table(hub_wom_i$mehr) #5 as their 1
+
+#summary(hub_wom_i$m?ssen) #mean 0.39
+#table(hub_wom_i$m?ssen) # 13 as their 1
+
+summary(hub_wom_i$menschen) #mean 0.37 
+table(hub_wom_i$menschen) #23 as their 1 
+
+summary(hub_wom_i$fraktion) #mean 0.035
+table(hub_wom_i$fraktion) # max: 0.95 of one person
+
+
+#################
+######MALES######
+#################
+load("hub_men_i_full.Rda")
+
+summary(hub_men_i_full$liebe) #mean 0.398
+table(hub_men_i_full$liebe) #15
+
+#summary(hub_men_i_full$m?ssen) #mean 0.46
+#table(hub_men_i_full$m?ssen) #40
+
+summary(hub_men_i_full$menschen) #mean 0.305
+table(hub_men_i_full$menschen) #11
+
+summary(hub_men_i_full$mehr) #0.396
+table(hub_men_i_full$mehr) #12
+
+summary(hub_men_i_full$deutschland) #0.334
+table(hub_men_i_full$deutschland) #15
+
+```
+

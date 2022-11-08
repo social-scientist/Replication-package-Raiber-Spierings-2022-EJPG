@@ -1,0 +1,1602 @@
+---
+title: "Analysis on frequencies: Gender patterns in Parliamentary Speech - doi: 10.1332/251510821X16539489608628"
+author: "Klara Raiber"
+date: "18/05/2022"
+---
+
+#setup
+```{r setup}
+library(beepr)
+library(stringr)
+library(plyr)
+library(foreign)
+library(tidyr)
+library(kableExtra)
+library(dplyr)
+library(haven)
+library(tidyverse)
+library(magrittr)
+library(plotly)
+library(ggplot2)
+#install.packages("quanteda")
+library(quanteda)
+#install.packages("readtext")
+library(readtext)
+library(antiword)
+#install.packages("XML")
+library(XML)
+library(httr)
+library(methods)
+library(data.table)
+#install.packages("tidytext")
+library(tidytext)
+#install.packages("NLP")
+library(NLP)
+#install.packages("tm")
+library(tm)
+#install.packages("igraph")
+library(igraph)
+#install.packages("regexSelect")
+#library(regexSelect)
+#install.packages("mclust")
+library(mclust)
+#install.packages("tictoc")
+library(tictoc)
+library(data.table)
+#install.packages("margins")
+#library(margins)
+library("ggpubr")
+
+## Clear and working directory
+
+setwd("") # insert own file directory
+
+#clear environment
+rm(list=ls())
+
+#set seed
+set.seed(2109)
+
+#check memory limit
+memory.limit()
+memory.limit(size = 20000)
+```
+
+#Descriptives for data part
+
+```{r}
+load("corpus_2019_06_08.Rda")
+load("Stammdaten18.Rda")
+#how many MPs are there?
+total_wom <- subset(total18, GESCHLECHT=="weiblich") #247 females
+total_men <- subset(total18, GESCHLECHT=="männlich") #415 males
+
+#################
+#####FEMALES#####
+#################
+load("corp_wom.Rda")
+length(unique(corp_wom$documents$ID)) #240 #7 females not talking
+
+
+#################
+######MALES######
+#################
+load("corp_men.Rda")
+length(unique(corp_men$documents$ID)) #403 #12 males not talking
+```
+
+##Frequencies of words for females and males
+
+```{r}
+
+#################
+#####FEMALES#####
+#################
+load("dtm_wom.Rda")
+
+top_wom_full <- topfeatures(dtm_wom, length(dtm_wom@Dimnames$features)) #all topfeatures
+
+####Nice data frame for frequencies
+## no weight
+fem_wo_full <- top_wom_full 
+#data frame
+wom_full <- data.frame(fem_wo_full)
+#Call variable Count
+names(wom_full)[1] <- 'Count'
+#include words in data frame
+wom_full$words <- rownames(wom_full)
+#include sex in data frame
+wom_full$sex <- c("female")
+#include a counting variable
+wom_full$count <- rep(1:nrow(wom_full))
+#include frequencies
+wom_full$frequ <- wom_full$Count/sum(wom_full$Count)
+
+sum(wom_full$Count)
+
+#save
+save(wom_full, file="wom_full.Rda")
+
+#################
+######MALES######
+#################
+load("dtm_men.Rda")
+
+top_men_full <- topfeatures(dtm_men, length(dtm_men@Dimnames$features)) #all topfeatures
+
+####Nice data frame for frequencies
+## no weight
+men_wo_full <- top_men_full 
+#data frame
+men_full <- data.frame(men_wo_full)
+#Call variable Count
+names(men_full)[1] <- 'Count'
+#include words in data frame
+men_full$words <- rownames(men_full)
+#include sex in data frame
+men_full$sex <- c("male")
+#include a counting variable
+men_full$count <- rep(1:nrow(men_full))
+#include frequencies
+men_full$frequ <- men_full$Count/sum(men_full$Count)
+
+#save
+save(men_full, file="men_full.Rda")
+
+################
+###COMPARISON###
+################
+summary(wom_full$Count)
+sum(wom_full$Count)
+summary(men_full$Count)
+sum(men_full$Count)
+
+####################
+#######GRAPHS#######
+####################
+##Boxplot
+
+mydf <- data.frame(y=c(men_full$Count, wom_full$Count), x=c(rep(1,length(men_full$Count)),
+                                                            rep(2,length(wom_full$Count))))
+
+png(filename="boxplot_di.png")
+
+jpeg(filename = "boxplot_di.jpg",
+     width = 700, height = 480, quality=500)
+boxplot(y~x,data=mydf, xlab="Log frequency of words used", ylab="Sex", horizontal = TRUE, log="x",
+        names=c("males", "females"), par(cex.lab=1.5), par(cex.axis=1.5))
+dev.off() 
+
+```
+
+#Topfeatures
+
+```{r}
+load("dtm_wom.Rda")
+load("wom_full.Rda")
+load("dtm_men.Rda")
+load("men_full.Rda")
+#################
+#####FEMALES#####
+#################
+#To access a list of the most frequently occurring features, we can use topfeatures():
+top_wom <- topfeatures(dtm_wom, 20)
+top_wom
+
+fem_wo <- top_wom / sum(wom_full$Count)
+fem_wo
+
+
+#################
+######MALES######
+#################
+#To access a list of the most frequently occurring features, we can use topfeatures():
+top_men <- topfeatures(dtm_men, 20)
+top_men
+
+#divide by amount of words used
+men_wo <- top_men / sum(men_full$Count)
+
+################
+###COMPARISON###
+################
+#female and male words in one data frame
+
+newi_wom <- data.frame(fem_wo)
+names(newi_wom)[1] <- 'Frequency'
+newi_wom$words <- rownames(newi_wom)
+newi_wom$sex <- c("women")
+
+newi_men <- data.frame(men_wo)
+names(newi_men)[1] <- 'Frequency'
+newi_men$words <- rownames(newi_men)
+newi_men$sex <- c("men")
+
+joint <- rbind(newi_wom, newi_men)
+
+newi_both <- merge(newi_men, newi_wom, by=("words"), all=TRUE)
+newi_both_exact <- merge(newi_men, newi_wom, by=("words"), all=FALSE)
+
+sub_wom <- newi_both_exact[c(1, 4,5)]
+names(sub_wom)[2] <- 'Frequency'
+names(sub_wom)[3] <- "MP"
+
+sub_men <- newi_both_exact[c(1, 2,3)]
+names(sub_men)[2] <- 'Frequency'
+names(sub_men)[3] <- "MP"
+
+
+joint_aus <- rbind(sub_men, sub_wom)
+
+
+
+joint_aus$labels <-
+  c(
+    "Deutschland (Germany)",
+    "Frage (question)",
+    "Frau (woman/Mrs.)",
+    "ganz (complete)",
+    "geht (go*)",
+    "gibt (give*)",
+    "Herr (Mr.)",
+    "heute (today)",
+    "immer (always)",
+    "Kollegen (male: colleagues)",
+    "Kolleginnen (female: colleagues)",
+    "mehr (more)",
+    "Menschen (people)",
+    "müssen (have to)",
+    "schon (already)",
+    "Deutschland (Germany)",
+    "Frage (question)",
+    "Frau (woman/Mrs.)",
+    "ganz (complete)",
+    "geht (go*)",
+    "gibt (give*)",
+    "Herr (Mr.)",
+    "heute (today)",
+    "immer (always)",
+    "Kollegen (male: colleagues)",
+    "Kolleginnen (female: colleagues)",
+    "mehr (more)",
+    "Menschen (people)",
+    "müssen (have to)",
+    "schon (already)")
+
+
+
+####################
+#######GRAPHS#######
+####################
+
+
+graph2_2 <- ggplot(joint_aus, aes(x=reorder(labels, Frequency), y=Frequency, fill=MP)) +
+                   #aes(x=labels, y=Frequency, fill=sex)) +
+               theme(axis.text.x=element_text(size=30, angle=90)) +
+              theme_set(theme_classic()) +
+              geom_bar(stat="identity", position=position_dodge()) +
+              coord_flip() + 
+              scale_fill_manual(values= c("darkslategrey", "darkgrey")) +
+              guides(fill = guide_legend(reverse = TRUE)) +
+              labs(x = "Words", y = "Relative Frequency", 
+                   title ="Comparison")
+
+
+graph2_2 
+
+ggsave(graph2_2, filename = "Figure2.eps", device = "eps", width = 18, height = 18, units = "cm", dpi = 500)
+
+
+```
+
+```{r}
+
+load("dtm_wom.Rda")
+load("wom_full.Rda")
+load("dtm_men.Rda")
+load("men_full.Rda")
+#################
+#####FEMALES#####
+#################
+#To access a list of the most frequently occurring features, we can use topfeatures():
+top_wom_2 <- topfeatures(dtm_wom, 100)
+top_wom_2
+
+fem_wo_2 <- top_wom_2 / sum(wom_full$Count)
+fem_wo_2
+
+
+#################
+######MALES######
+#################
+#To access a list of the most frequently occurring features, we can use topfeatures():
+top_men_2 <- topfeatures(dtm_men, 100)
+top_men_2
+
+#divide by amount of words used
+men_wo_2 <- top_men_2 / sum(men_full$Count)
+men_wo_2
+
+
+################
+###COMPARISON###
+################
+#female and male words in one data frame
+
+test_wom <- data.frame(fem_wo_2)
+names(test_wom)[1] <- 'Frequency'
+test_wom$words <- rownames(test_wom)
+test_wom$sex <- c("women")
+
+test_men <- data.frame(men_wo_2)
+names(test_men)[1] <- 'Frequency'
+test_men$words <- rownames(test_men)
+test_men$sex <- c("men")
+
+test_both_exact <- merge(test_men, test_wom, by=("words"), all=FALSE)
+
+
+sub_wom_2 <- test_both_exact[c(1, 4,5)]
+names(sub_wom_2)[2] <- 'Frequency'
+names(sub_wom_2)[3] <- "MP"
+
+sub_men_2 <- test_both_exact[c(1, 2,3)]
+names(sub_men_2)[2] <- 'Frequency'
+names(sub_men_2)[3] <- "MP"
+
+
+joint_aus_2 <- rbind(sub_wom_2, sub_men_2)
+
+sub_wom_20 <-
+  subset(
+    joint_aus_2,
+    words == "bundesregierung" | words == "dank" |  words == "liebe" |
+      words == "vielen" | words == "wer"
+  )
+
+sub_wom_20$labels <-
+  c(
+    "Bundesregierung (government)",
+    "Dank (thanks)",
+    "liebe (dear)",
+    "vielen (very)",
+    "wer (who)"
+  )
+
+
+
+wom_20 <- ggplot(sub_wom_20, aes(x=reorder(labels, Frequency), y=Frequency, fill=MP)) +
+                   #aes(x=labels, y=Frequency, fill=sex)) +
+               theme(aspect.ratio = 0.1, axis.text.x=element_text(size=30, angle=90)) +
+              theme_set(theme_classic()) +
+              geom_bar(stat="identity", width = 0.95, position=position_dodge()) +
+              coord_flip() + 
+              scale_fill_manual(values= c("darkslategrey", "darkgrey")) +
+              guides(fill = guide_legend(reverse = TRUE)) +
+              ylim(0, 0.0045) +
+              labs(x = "Words", y = "Relative Frequency", 
+                   title ="Words that are in the top 20 for women but not for men")
+
+
+wom_20
+
+ggsave(wom_20, filename = "words_wom_20.jpg", device = "jpg", width = 18, height = 9, units = "cm", dpi = 500)
+
+
+sub_men_20 <-
+  subset(
+    joint_aus_2,
+    words == "dafür" | words == "damen" |  words == "euro" |
+      words == "ja" | words == "sagen"
+  )
+
+sub_men_20$labels <-
+  c("dafür (in favor)",
+    "Damen (ladies)",
+    "Euro (euro)",
+    "ja (yes)",
+    "sagen (saying)")
+
+
+sub_men_20$MP <- factor(sub_men_20$MP, levels = c("women", "men"))
+
+men_20 <- ggplot(sub_men_20, aes(x=reorder(labels, Frequency), y=Frequency, fill=MP)) +
+                   #aes(x=labels, y=Frequency, fill=sex)) +
+               theme(aspect.ratio = 0.1, axis.text.x=element_text(size=30, angle=90)) +
+              theme_set(theme_classic()) +
+              geom_bar(stat="identity", width = 0.95, position=position_dodge()) +
+              coord_flip() + 
+              scale_fill_manual(values= c("darkgrey", "darkslategrey")) +
+              guides(fill = guide_legend(reverse = TRUE)) +
+              ylim(0, 0.0045) +
+              labs(x = "Words", y = "Relative Frequency", 
+                   title ="Words that are in the top 20 for men but not for women")
+
+
+men_20
+
+ggsave(men_20, filename = "words_men_20.jpg", device = "jpg", width = 18, height = 9, units = "cm", dpi = 500)
+
+
+```
+
+
+
+#Comparison of words used
+
+```{r}
+load("men_full.Rda")
+load("wom_full.Rda")
+################
+###COMPARISON###
+###############
+###Intersect###
+###############
+length(intersect(men_full$words, wom_full$words)) #intersect 76516
+76516 / 162210
+76516 / 123172 
+intersect_words <- intersect(men_full$words, wom_full$words)
+save(intersect_words, file="intersect_words.Rda")
+
+#Length of words
+intersect_words.da <- as.data.frame(intersect_words)
+intersect_words.da$words <- as.character(intersect_words.da$intersect_words)
+length_interse <- nchar(intersect_words.da$words, type = "chars")
+mean(length_interse) #12.11
+median(length_interse) #11
+
+#################################
+##words in men but not in women##
+#################################
+diff_1 <- as.data.frame(setdiff(men_full$words, wom_full$words)) #85319
+#length of words
+names(diff_1)[names(diff_1)=="setdiff(men_full$words, wom_full$words)"] <- "words"
+diff_1$words <- as.character(diff_1$words)
+length_diff1 <- nchar(diff_1$words, type = "chars")
+mean(length_diff1) #14.2096
+median(length_diff1) #14
+
+#include count of men
+names(diff_1)[names(diff_1)=="setdiff(men_full$words, wom_full$words)"] <- "words"
+men_only <- merge(diff_1, men_full,by="words")
+mean(men_only$Count) #words used 1.5 times from men on average
+
+max(men_only$Count) #87 maximum
+
+save(men_only, file="men_only.Rda")
+
+#################################
+##words in women but not in men##
+#################################
+diff_2 <- as.data.frame(setdiff(wom_full$words, men_full$words)) #46731
+
+#length of words
+names(diff_2)[names(diff_2)=="setdiff(wom_full$words, men_full$words)"] <- "words"
+diff_2$words <- as.character(diff_2$words)
+length_diff2 <- nchar(diff_2$words, type = "chars")
+mean(length_diff2) #14.333
+median(length_diff2) #14
+
+#include count of women
+
+wom_only <- merge(diff_2, wom_full, by="words")
+mean(wom_only$Count) #words used 1.3 times from women on average
+max(wom_only$Count) # 43 maximum
+
+save(wom_only, file="wom_only.Rda")
+
+```
+
+#document feature matrix for individuals # prepare data
+
+```{r}
+
+load("Stammdaten18.Rda")
+#################
+#####FEMALES#####
+#################
+#to get only ID of females
+total_wom <- subset(total18, GESCHLECHT=="weiblich")
+
+load("corp_wom.Rda")
+IDs <- unique(corp_wom$documents$ID)
+
+load("dtm_wom.Rda")
+
+
+#put individual data to data frame in a loop
+
+ID <- IDs[1]
+p <- dfm_subset(dtm_wom, (ID == IDs[1]))
+t  <- topfeatures(p, length(p@Dimnames$features))
+vfull_wom <- data.frame(t)
+vfull_wom$words <- rownames(vfull_wom)
+names(vfull_wom)[1] <- ID
+
+  
+for (i in c(2:length(IDs))) {
+  ID <- IDs[i]
+  
+  p <- dfm_subset(dtm_wom, (ID == IDs[i]))
+  t  <- topfeatures(p, length(p@Dimnames$features))
+  v <- data.frame(t)
+  names(v)[1] <- ID
+   v$words <- rownames(v)
+  vfull_wom <- merge(vfull_wom, v, by=("words"), all=FALSE)
+  tic()
+  print(i)
+  toc()
+}
+
+
+#beep("complete")
+
+#save
+save(vfull_wom, file="vfull_wom.Rda")
+
+load("vfull_wom.Rda")
+#put in new object
+x_wom <- vfull_wom
+#words as rows
+rownames(x_wom) <- x_wom$words
+#exclude words as a variable
+x_wom <- x_wom[ -c(1) ]
+#transpose data
+ind_wom <- transpose(x_wom)
+#keep row and column names
+colnames(ind_wom) <- rownames(x_wom)
+rownames(ind_wom) <- colnames(x_wom)
+
+head(ind_wom)
+#save
+save(ind_wom, file="ind_wom.Rda")
+
+#################
+######MALES######
+#################
+#to get only ID of males
+total_men <- subset(total18, GESCHLECHT=="männlich")
+
+load("corp_men.Rda")
+IDs <- unique(corp_men$documents$ID)
+
+load("dtm_men.Rda")
+
+
+#put individual data to data frame in a loop
+
+ID <- IDs[1]
+p <- dfm_subset(dtm_men, (ID == IDs[1]))
+t  <- topfeatures(p, length(p@Dimnames$features))
+vfull_men <- data.frame(t)
+vfull_men$words <- rownames(vfull_men)
+names(vfull_men)[1] <- ID
+
+  
+for (i in c(2:length(IDs))) {
+  ID <- IDs[i]
+  
+  p <- dfm_subset(dtm_men, (ID == IDs[i]))
+  t  <- topfeatures(p, length(p@Dimnames$features))
+  v <- data.frame(t)
+  names(v)[1] <- ID
+   v$words <- rownames(v)
+  vfull_men <- merge(vfull_men, v, by=("words"), all=FALSE)
+  tic()
+  print(i)
+  toc()
+}
+#beep("complete")
+
+#save
+save(vfull_men, file="vfull_men.Rda")
+
+load("vfull_men.Rda")
+#put in new object
+x_men <- vfull_men
+#words as rows
+rownames(x_men) <- x_men$words
+#exclude words as a variable
+x_men <- x_men[ -c(1) ]
+#transpose data
+ind_men <- transpose(x_men)
+#keep row and column names
+colnames(ind_men) <- rownames(x_men)
+rownames(ind_men) <- colnames(x_men)
+
+head(ind_men)
+sum(ind_men)
+#save
+save(ind_men, file="ind_men.Rda")
+
+```
+
+#Influence individuals most frequent words
+
+```{r}
+#################
+#####FEMALES#####
+#################
+load("ind_wom.Rda")
+load("wom_full.Rda")
+load("vfull_wom.Rda")
+load("Stammdaten18.Rda")
+
+#look at data
+head(ind_wom)
+
+#check if the values are right
+#sum(ind_wom$müssen) #yes sum is right
+#min(ind_wom$müssen) #0 some one never uses müssen
+#max(ind_wom$müssen) #one person uses 393 times müsssen
+
+
+#relative frequencies
+rel_fre_wom <- as.data.frame(sapply(ind_wom, function(v){ 
+  v <- v/sum(v)
+
+}))
+
+#put words in extra column
+rownames(rel_fre_wom) <- rownames(ind_wom)
+
+
+#check
+head(rel_fre_wom)
+
+#look at dank
+max(rel_fre_wom$dank) #23,27 Percent by one person
+min(rel_fre_wom$dank) # someone never says dank, only 5 persons
+
+#how can I see how is saying the words?
+#dank
+i_dank <- c("dank")
+dank <- rel_fre_wom[i_dank] ## 23.27 (11002019) Ulla Schmidt; 17.79 Claudia Roth
+dank_ab <- ind_wom[i_dank] # 2546 words by Ulla Schmidt; 1946 words by Claudia Roth
+#Ulla Schmidt
+2546/ sum(vfull_wom$`11002019`) #2.04 of her words for thanking
+#Claudia Roth
+1946/ sum(vfull_wom$`11003212`) # 1.59 of her words for thanking
+
+#human
+max(rel_fre_wom$menschen) #max of 0.0247 no big influence
+
+# kolleginnen
+max(rel_fre_wom$kolleginnen) # 8.29 Percent
+i_kolleginnen <- c("kolleginnen")
+kolleginnen <- rel_fre_wom[i_kolleginnen] # 8.29 by Edelgard Bulmahn (11000305); 4,48 Percent by Claudia Roth (11003212)
+
+#kollegen
+max(rel_fre_wom$kollegen) # 8.45%
+i_kollegen <- c("kollegen")
+kollegen <- rel_fre_wom[i_kollegen] # 8.45% Edelgard Bulmahn; 6.42% Claudia Roth; 5.71% Petra Pau (11003206)
+
+
+#do the vice presidents talk more in general?
+
+#all  words
+sum(wom_full$Count)
+#Edelgard Bulmahn (11000305)
+sum(vfull_wom$`11000305`) # 120276 words
+sum(vfull_wom$`11000305`) / sum(wom_full$Count) #4.59%
+
+#Claudia Roth (11003212)
+sum(vfull_wom$`11003212`) # 
+sum(vfull_wom$`11003212`) / sum(wom_full$Count) #4.69%
+
+#Petra Pau (11003206)
+sum(vfull_wom$`11003206`) # 
+sum(vfull_wom$`11003206`) / sum(wom_full$Count) #3.63%
+
+#Ulla Schmidt (11002019)
+sum(vfull_wom$`11002019`) # 
+sum(vfull_wom$`11002019`) / sum(wom_full$Count) #4.79
+
+#all four women together
+(sum(vfull_wom$`11000305`) + sum(vfull_wom$`11003212`) +  sum(vfull_wom$`11003206`) + sum(vfull_wom$`11002019`)) / sum(wom_full$Count) #17.70% of the words by women by these four women
+
+#deutschland
+max(rel_fre_wom$deutschland) #  0.041887
+i_deutschland <- c("deutschland")
+deutschland<- rel_fre_wom[i_deutschland] 
+# 11001478 - 0.0419 - Angela Merkel
+# 11004342 - 0.034239322 Lindholz	Andrea CSU
+# 11003212 - 0.031062478 Claudia Roth (Gruene)
+# 300000 - 0.030709495  Johanna Wanka, Bundesministerin für Bildung und Forschung: - CDU
+# 11000305 - 0.028944582 Edelgard Bulmahn  SPD
+
+
+deutschland$ID <- rownames(deutschland)
+
+deutschland_2 <- merge(deutschland, total18, by = "ID") 
+keeps <- c("deutschland","PARTEI_KURZ", "ID")
+deutschland_wom = deutschland_2[keeps]
+
+deut_cum <- aggregate(deutschland_wom$deutschland, by=list(Category=deutschland_wom$PARTEI_KURZ), FUN=sum)
+prop.table(table(deutschland_wom$PARTEI_KURZ))
+#in relation more likely by green party
+
+#frage
+max(rel_fre_wom$frage) #0.09769
+i_frage <- c("frage")
+frage <- rel_fre_wom[i_frage] # Petra Pau; 0.092434 Claudia Roth; 0.0604 Edelgard Bulmahn; 0.0578 Ulla Schmidt
+
+#frau
+max(rel_fre_wom$frau) # 0.0972
+i_frau <- c("frau")
+frau <- rel_fre_wom[i_frau] #0.0972 Claudia Roth; 0.05849 Ulla SChmidt; 0.05849 Edelgard Bulmahn
+
+#ganz
+max(rel_fre_wom$ganz) #0.03071
+
+#geht
+max(rel_fre_wom$geht) #0.03443
+
+#gibt
+max(rel_fre_wom$gibt) #0.04616
+
+#herr
+max(rel_fre_wom$herr) #0.13296
+i_herr <- c("herr")
+herr <- rel_fre_wom[i_herr] # #claudia Roth; 0.07938  Edelgard Bulmahn; 0.06527 Ulla Schmidt
+
+#heute
+max(rel_fre_wom$heute) #0.02645
+
+#immer
+max(rel_fre_wom$immer) #0.02879
+
+#mehr
+max(rel_fre_wom$mehr) #0.0231
+i_mehr <- c("mehr")
+mehr <- rel_fre_wom[i_mehr]
+
+#300000 0.0306490385 Johanna Wanka, Bundesministerin für Bildung und Forschung: - CDU
+#11003547 0.0279447115 Hajduk	Anja Gruene
+#11003545 0.0271935096 Hagedorn	Bettina SPD
+# 200000 0.0220853365 Manuela Schwesig, Bundesministerin für Familie, Senioren, Frauen und Jugend: SPD
+
+mehr$ID <- rownames(mehr)
+
+mehr_2 <- merge(mehr, total18, by = "ID") 
+keeps <- c("mehr","PARTEI_KURZ", "ID")
+mehr_wom = mehr_2[keeps]
+mehr_cum <- aggregate(mehr_wom$mehr, by=list(Category=mehr_wom$PARTEI_KURZ), FUN=sum)
+#
+
+
+#menschen
+max(rel_fre_wom$menschen) # 0.02478
+i_menschen <- c("menschen")
+menschen <- rel_fre_wom[i_menschen]
+	
+#11001478 0.024784743 Merkel
+#11003869 0.023899574 Sabine Zimmermann die Linke
+#11003212 0.022290175 Claudia Roth 
+
+
+menschen$ID <- rownames(menschen)
+
+menschen_2 <- merge(menschen, total18, by = "ID") 
+keeps <- c("menschen","PARTEI_KURZ", "ID")
+menschen_wom = menschen_2[keeps]
+
+#euro
+max(rel_fre_wom$euro) # 
+i_euro <- c("euro")
+euro <- rel_fre_wom[i_euro]
+
+#300000 0.0306490385 Johanna Wanka, Bundesministerin für Bildung und Forschung: - CDU
+#11003547 0.0279447115 Hajduk	Anja Gruene
+#11003545 0.0271935096 Hagedorn	Bettina SPD
+# 200000 0.0220853365 Manuela Schwesig, Bundesministerin für Familie, Senioren, Frauen und Jugend: SPD
+
+euro$ID <- rownames(euro)
+
+euro_2 <- merge(euro, total18, by = "ID") 
+keeps <- c("euro","PARTEI_KURZ", "ID")
+euro_wom = euro_2[keeps]
+euro_cum <- aggregate(euro_wom$euro, by=list(Category=euro_wom$PARTEI_KURZ), FUN=sum)
+#gruene and linke
+
+#################
+######MALES###### 
+#################
+load("ind_men.Rda")
+load("vfull_men.Rda")
+load("men_full.Rda")
+
+#look at data
+head(ind_men)
+
+#check if the values are right
+#sum(ind_men$müssen) #yes sum is right
+#min(ind_men$müssen) #0 some one never uses müssen
+#max(ind_men$müssen) #one person uses 393 times müsesen
+
+
+#relative frequencies
+rel_fre_men <- as.data.frame(sapply(ind_men, function(v){ 
+  v <- v/sum(v)
+
+}))
+
+#put words in extra column
+rownames(rel_fre_men) <- rownames(ind_men)
+
+#check
+head(rel_fre_men)
+
+#check also dank
+max(rel_fre_men$dank)# max of 2.99%
+i_dank <- c("dank")
+dank <- rel_fre_men[i_dank] # Johannes Singhammer (11002800); 2.50% Peter Hintze (11000907)
+
+#danke
+max(rel_fre_men$danke) # 4.34 
+i_danke <- c("danke")
+danke <- rel_fre_men[i_danke] # Peter Hintze (11000907)
+
+#kollegen
+max(rel_fre_men$kollegen) # 6.68
+i_kollegen <- c("kollegen")
+kollegen <- rel_fre_men[i_kollegen] #
+
+#kolleginnen
+max(rel_fre_men$kolleginnen) #4.35
+i_kolleginnen <- c("kolleginnen")
+kolleginnen <- rel_fre_men[i_kolleginnen] #Nobert Lammert (11001274)
+
+#euro
+max(rel_fre_men$euro) # 3.03%
+i_euro <- c("euro")
+euro <- rel_fre_men[i_euro]
+
+#11003826 0.030295839 Rehberg	Eckhardt CDU
+#11004012 0.028318304 Birkwald	Matthias W. Die Linke
+#11003755 0.018509729 Gabriel	Sigmar SPD
+#11003800 0.016453093 Leutert	Michael die Linke
+
+euro$ID <- rownames(euro)
+
+euro_2 <- merge(euro, total18, by = "ID") 
+keeps <- c("euro","PARTEI_KURZ", "ID")
+euro_men = euro_2[keeps]
+
+#deutschland
+max(rel_fre_men$deutschland) #  0.01853
+i_deutschland <- c("deutschland")
+deutschland <- rel_fre_men[i_deutschland]
+
+#11004105 0.018533195 Maizi?re	Thomas CDu
+#11001274 0.018472231 Lammert	Norbert CDU
+#11003755 0.017801622 Gabriel	Sigmar SPD
+#11003589 0.017131013 Mayer	Stephan CDU
+
+deutschland$ID <- rownames(deutschland)
+
+deutschland_2 <- merge(deutschland, total18, by = "ID") 
+keeps <- c("deutschland","PARTEI_KURZ", "ID")
+deutschland_men = deutschland_2[keeps]
+
+
+
+#frage
+max(rel_fre_men$frage) #0.06547
+i_frage <- c("frage")
+frage <- rel_fre_men[i_frage] # Peter Hintze (11000907)
+
+#frau
+max(rel_fre_men$frau) # 0.0515
+i_frau <- c("frau")
+frau <- rel_fre_men[i_frau] # Peter Hintze (11000907)
+
+#ganz
+max(rel_fre_men$ganz) #0.0189
+
+#geht
+max(rel_fre_men$geht) #0.01938
+
+#gibt
+max(rel_fre_men$gibt) #0.02769
+
+#herr
+max(rel_fre_men$herr) #0.05449
+i_herr <- c("herr")
+herr <- rel_fre_men[i_herr] # #Nobert Lammert (11001274); 0.0445 Peter Hintze
+
+#heute
+max(rel_fre_men$heute) #0.02326
+
+#immer
+max(rel_fre_men$immer) #0.01589
+
+#mehr
+max(rel_fre_men$mehr) #0.01479
+
+#menschen
+max(rel_fre_men$menschen) # 2.26%
+i_menschen <- c("menschen")
+menschen <- rel_fre_men[i_menschen]
+menschen$ID <- rownames(menschen)
+
+menschen_2 <- merge(menschen, total18, by = "ID") 
+keeps <- c("menschen","PARTEI_KURZ", "ID")
+menschen_men = menschen_2[keeps]
+
+
+#müssen
+#max(rel_fre_men$müssen) # 1.48%
+
+#how much do presidents talk
+#Nobert Lammert (11001274)
+sum(vfull_men$`11001274`) # 
+sum(vfull_men$`11001274`) / sum(men_full$Count) # 3.5%
+
+#Peter Hintze (11000907)
+sum(vfull_men$`11000907`) # 
+sum(vfull_men$`11000907`) / sum(men_full$Count) # 1.66
+
+#Johannes Singhammer (11002800)
+sum(vfull_men$`11002800`) # 
+sum(vfull_men$`11002800`) / sum(men_full$Count) # 1.85
+
+```
+
+##Influence of individuals on the words only used by one sex
+
+```{r}
+#################
+#####FEMALES#####
+#################
+load("ind_wom.Rda")
+load("wom_full.Rda")
+load("vfull_wom.Rda")
+load("wom_only.Rda")
+
+#check 30 most frequently used words by females only
+
+#umgruppierungen
+max(ind_wom$umgruppierungen) # 43
+sum(ind_wom$umgruppierungen > 0) # 
+
+
+i_umgruppierungen <- c("umgruppierungen")
+umgruppierungen <- ind_wom[i_umgruppierungen] # 43 all the time by Petra Pau
+
+#bgg
+max(ind_wom$bgg) # 4
+sum(ind_wom$bgg > 0) # 7 women
+
+
+#gebotsverfahren
+max(ind_wom$gebotsverfahren) #8
+sum(ind_wom$gebotsverfahren > 0) # 6
+
+#tier?rztin
+#max(ind_wom$tier?rztin) # 15
+#sum(ind_wom$tier?rztin > 0) # 4
+#i_tier?rztin <- c("tier?rztin")
+#tier?rztin <- rel_fre_wom[i_tier?rztin]
+
+#rezeptfreiheit
+max(ind_wom$rezeptfreiheit) # 5
+sum(ind_wom$rezeptfreiheit > 0) # 9
+
+#lesbos
+max(ind_wom$lesbos) # 7
+sum(ind_wom$lesbos > 0) # 8
+
+#ausbaumengen
+max(ind_wom$ausbaumengen) # 6
+sum(ind_wom$ausbaumengen > 0) # 7
+
+#sexistische
+
+max(ind_wom$sexistische) #5
+sum(ind_wom$sexistische > 0)  #8
+
+
+i_sexistische <- c("sexistische")
+sexistische <- ind_wom[i_sexistische] # 8 persons from 1 to 5 times
+
+
+#hochwertungsfaktor
+max(ind_wom$hochwertungsfaktor) # 14
+sum(ind_wom$hochwertungsfaktor > 0) # 3
+i_hochwertungsfaktor<- c("hochwertungsfaktor")
+hochwertungsfaktor <- rel_fre_wom[i_hochwertungsfaktor]
+
+#klimapolitikerin
+max(ind_wom$klimapolitikerin) # 14
+sum(ind_wom$klimapolitikerin > 0)  # 2
+
+#teilzeitausbildung
+max(ind_wom$teilzeitausbildung) # 7
+sum(ind_wom$teilzeitausbildung > 0)  # 5
+
+i_teilzeitausbildung <- c("teilzeitausbildung")
+teilzeitausbildung <- ind_wom[i_teilzeitausbildung] #Bettina Hornhues; Katja Mast; Dagmar Schmidt; Antje Lezius; Gudrun Zollner
+
+#ganztagskitas
+max(ind_wom$ganztagskitas) # 9
+sum(ind_wom$ganztagskitas > 0)  # 3
+
+i_ganztagskitas <- c("ganztagskitas")
+ganztagskitas <- ind_wom[i_ganztagskitas]
+
+#sorgearbeit
+sum(ind_wom$sorgearbeit > 0) #8
+
+#ulipristalacetat
+sum(ind_wom$ulipristalacetat > 0) #16
+
+#energiebedarf
+max(ind_wom$energiebedarf) # 1
+sum(ind_wom$energiebedarf > 0)  # 1
+
+i_energiebedarf <- c("energiebedarf")
+energiebedarf <- ind_wom[i_energiebedarf] #B?rbel Kofler (SPD)
+
+#gesundheitsministeriums
+sum(ind_wom$gesundheitsministeriums > 0) # 12
+
+#pelztierhaltung
+sum(ind_wom$pelztierhaltung > 0) #5
+
+#einspeisevergütungssystems
+#sum(ind_wom$einspeisevergütungssystems > 0) #5
+#i_einspeisevergütungssystems<- c("einspeisevergütungssystems")
+#einspeisevergütungssystems <- rel_fre_wom[i_einspeisevergütungssystems]
+
+#milit?rseelsorge
+#sum(ind_wom$milit?rseelsorge >0) #4
+
+#minderausbau
+sum(ind_wom$minderausbau > 0) #6
+
+#zusatztagesordnungspunkt
+sum(ind_wom$zusatztagesordnungspunkt > 0)
+
+#sapv
+sum(ind_wom$sapv > 0)
+
+#ampelkennzeichnung
+sum(ind_wom$ampelkennzeichnung > 0)
+
+#arbeitsst?tten
+#sum(ind_wom$arbeitsst?tten > 0)
+
+#dso
+sum(ind_wom$dso > 0)
+
+#energydrinks
+sum(ind_wom$energydrinks > 0)
+
+#gleichstellungsbeauftragten
+sum(ind_wom$gleichstellungsbeauftragten > 0)
+
+#landwirtschaftsbetriebe
+sum(ind_wom$landwirtschaftsbetriebe > 0)
+
+#notfallkontrazeptiva
+sum(ind_wom$notfallkontrazeptiva > 0)
+
+#unbrk
+sum(ind_wom$unbrk > 0)
+
+#bundesfernstra?enverwaltung
+#sum(ind_wom$bundesfernstra?enverwaltung > 0)
+
+#################
+######MALES######
+#################
+load("ind_men.Rda")
+load("vfull_men.Rda")
+load("men_full.Rda")
+load("men_only.Rda")
+
+
+#check 30 most frequently used words by males only
+
+#überwiesene
+#max(ind_men$überwiesene) # 85
+#sum(ind_men$überwiesene) #87
+#sum(ind_men$überwiesene > 0) #3
+
+#i_überwiesene <- c("überwiesene")
+#überwiesene <- ind_men[i_überwiesene] # 3, but twice once and 85 times Norbert Lammert 
+
+
+#schuldentragf?higkeit
+#max(ind_men$schuldentragf?higkeit) # 8
+#sum(ind_men$schuldentragf?higkeit > 0) # 20
+
+#i_schuldentragf?higkeit <- c("schuldentragf?higkeit")
+#schuldentragf?higkeit <- ind_men[i_schuldentragf?higkeit] # Wolfgang Sch?uble
+ 
+
+#stasiunterlagenbeh?rde
+#max(ind_men$stasiunterlagenbeh?rde) # 12
+#sum(ind_men$stasiunterlagenbeh?rde > 0) # 10
+
+
+#luftverkehrswirtschaft
+max(ind_men$luftverkehrswirtschaft) # 12
+sum(ind_men$luftverkehrswirtschaft > 0) # 9
+
+#aiib
+max(ind_men$aiib) # 11
+sum(ind_men$aiib > 0) # 4
+
+
+#markenamt
+max(ind_men$markenamt) # 9
+sum(ind_men$markenamt > 0)  # 12
+
+i_markenamt <- c("markenamt")
+markenamt <- ind_men[i_markenamt] #9 Dennis Rohde, 6 Heiko Maas
+
+
+#bemautung
+max(ind_men$bemautung) # 13
+sum(ind_men$bemautung > 0) # 7
+
+i_bemautung <- c("bemautung")
+bemautung <- ind_men[i_bemautung] #13 Sebastian Hartmann; 5 Alexander Dobrindt
+
+
+#rentenversicherungsbeitrag
+max(ind_men$rentenversicherungsbeitrag) # 12
+sum(ind_men$rentenversicherungsbeitrag > 0) # 5
+
+#vermiedenen
+max(ind_men$vermiedenen) # 8
+sum(ind_men$vermiedenen > 0) # 11
+
+#bepsinitiative
+max(ind_men$bepsinitiative) # 4
+sum(ind_men$bepsinitiative > 0) #12 
+
+#haushaltsausgleich
+
+max(ind_men$haushaltsausgleich) # 7
+sum(ind_men$haushaltsausgleich > 0) # 11 
+
+i_haushaltsausgleich <- c("haushaltsausgleich")
+haushaltsausgleich <- ind_men[i_haushaltsausgleich] #7 Steffen Kampeter, 3 Wolfgang Sch?uble
+
+#emvg
+sum(ind_men$emvg > 0)
+
+#regionalbanken
+sum(ind_men$regionalbanken > 0)
+
+#spezialdienste
+sum(ind_men$spezialdienste > 0)
+
+#atd
+sum(ind_men$atd > 0)
+
+#binnenwirtschaft
+sum(ind_men$binnenwirtschaft > 0)
+
+#immobilienblase
+sum(ind_men$immobilienblase > 0)
+
+#gründerszene
+#sum(ind_men$gründerszene > 0)
+
+#investitionslinie
+sum(ind_men$investitionslinie > 0)
+
+#peres
+sum(ind_men$peres > 0)
+
+#symptombek?mpfung
+#sum(ind_men$symptombek?mpfung > 0)
+
+#almaliki
+sum(ind_men$almaliki > 0)
+
+#pisaschock
+sum(ind_men$pisaschock > 0)
+
+#prim?rüberschuss
+#sum(ind_men$prim?rüberschuss > 0)
+
+#tabbericht
+sum(ind_men$tabbericht > 0)
+
+#au?enhandelsüberschuss
+#sum(ind_men$au?enhandelsüberschuss > 0)
+
+#bündnisf?higkeit
+#sum(ind_men$bündnisf?higkeit > 0)
+
+#cruz
+sum(ind_men$cruz > 0)
+
+#doppelzüngigkeit
+#sum(ind_men$doppelzüngigkeit > 0)
+
+#forschungsfreiheit
+sum(ind_men$forschungsfreiheit > 0)
+```
+
+#excluding all vice presidents 
+
+```{r}
+#IDs of (vice) presidents
+ID_vp_wom   <- c("11002019", "11000305", "11003206","11003212")
+ID_vp_men <- c("11002800","11000907","11001274")
+
+load("dtm_wom.Rda")
+load("dtm_men.Rda")
+
+#################
+#####FEMALES#####
+#################
+
+#remove vice presidents from dfm object
+wom_op <- dfm_remove(dtm_wom, pattern=ID_vp_wom)
+
+
+full_op <- topfeatures(wom_op, length(wom_op@Dimnames$features)) #all topfeatures
+
+####Nice data frame for frequencies
+## no weight
+fem_wo_full <- full_op 
+#data frame
+wom_full_op <- data.frame(fem_wo_full)
+#Call variable Count
+names(wom_full_op)[1] <- 'Count'
+#include words in data frame
+wom_full_op$words <- rownames(wom_full_op)
+#include sex in data frame
+wom_full_op$sex <- c("women")
+#include a counting variable
+wom_full_op$count <- rep(1:nrow(wom_full_op))
+#include frequencies
+wom_full_op$frequ <- wom_full_op$Count/sum(wom_full_op$Count)
+
+sum(wom_full_op$Count)
+
+save(wom_full_op, file="wom_full_op.Rda")
+
+
+#To access a list of the most frequently occurring features, we can use topfeatures():
+top_wom_op <- topfeatures(wom_op, 15)
+top_wom_op
+
+fem_wo_op <- top_wom_op / sum(wom_full_op$Count)
+fem_wo_op
+
+
+#################
+######MALES######
+#################
+
+#remove vice presidents from dfm object
+men_op <- dfm_remove(dtm_men, pattern=ID_vp_men)
+
+
+full_op <- topfeatures(men_op, length(men_op@Dimnames$features)) #all topfeatures
+
+####Nice data frame for frequencies
+## no weight
+fem_wo_full <- full_op 
+#data frame
+men_full_op <- data.frame(fem_wo_full)
+#Call variable Count
+names(men_full_op)[1] <- 'Count'
+#include words in data frame
+men_full_op$words <- rownames(men_full_op)
+#include sex in data frame
+men_full_op$sex <- c("men")
+#include a counting variable
+men_full_op$count <- rep(1:nrow(men_full_op))
+#include frequencies
+men_full_op$frequ <- men_full_op$Count/sum(men_full_op$Count)
+
+sum(men_full_op$Count)
+
+save(men_full_op, file="men_full_op.Rda")
+
+
+#To access a list of the most frequently occurring features, we can use topfeatures():
+top_men_op <- topfeatures(men_op, 15)
+top_men_op
+
+male_wo_op <- top_men_op / sum(men_full_op$Count)
+male_wo_op
+
+
+################
+###COMPARISON###
+################
+#female and male words in one data frame
+
+wom <- data.frame(fem_wo_op)
+names(wom)[1] <- 'Frequency'
+wom$words <- rownames(wom)
+wom$sex <- c("women")
+
+men <- data.frame(male_wo_op)
+names(men)[1] <- 'Frequency'
+men$words <- rownames(men)
+men$sex <- c("men")
+
+
+both <- merge(men, wom, by=("words"), all=TRUE)
+both_exact <- merge(men, wom, by=("words"), all=FALSE)
+
+
+wom$labels <-
+  c(
+    "müssen (have to)",
+    "mehr (more)",
+    "Menschen (people)",
+    "vielen (very)",
+    "Herr (Mr.)",
+    "Dank (thanks)",
+    "Frau (woman/Mrs.)",
+    "Kollegen (male:
+                colleagues)",
+    "schon (already)",
+    "gibt (give*)",
+    "Bundesregierung
+                (government)",
+    "ganz (complete)",
+    "Kolleginnen (female:
+                colleagues)",
+    "Deutschland (Germany)",
+    "wer (who)"
+  )
+
+
+
+men$labels <-
+  c(
+    "müssen (have to)",
+    "mehr (more)",
+    "Herr (Mr.)",
+    "Deutschland (Germany)",
+    "gibt (give*)",
+    "Menschen (people)",
+    "Frau (woman/Mrs.)",
+    "schon (already)",
+    "Kollegen (male:
+                colleagues)",
+    "sagen (saying)",
+    "geht (go*)",
+    "heute (today)",
+    "Euro (euro)",
+    "ganz (complete)",
+    "dafür (in favor)"
+  )
+
+
+####################
+#######GRAPHS#######
+####################
+
+
+wom_op <- ggplot(wom, aes(x=reorder(labels, Frequency), y=Frequency)) +
+              theme_set(theme_classic()) +
+              theme(axis.text.y = element_text(size = 10)) +
+              ylim(0, 0.006) +
+              geom_bar(stat="identity", width = 0.7, fill = "darkgrey",
+                       position=position_dodge()) +
+              coord_flip() + 
+              labs(x = "Words", y = "Relative Frequency", 
+                   title ="Women")
+
+ggsave(wom_op, filename = "wom_op.jpg", device = "jpg", width = 10, height = 16, units = "cm", dpi = 500)
+
+men_op <- ggplot(men, aes(x=reorder(labels, Frequency), y=Frequency)) +
+              theme_set(theme_classic()) +
+             theme(axis.text.y = element_text(size = 10)) +
+              ylim(0, 0.006) +
+              geom_bar(stat="identity", width = 0.7, fill = "darkslategrey",
+                       position=position_dodge()) +
+              coord_flip() + 
+              labs(x = "Words", y = "Relative Frequency", 
+                   title ="Men")
+
+
+men_op 
+ggsave(men_op, filename = "men_op.jpg", device = "jpg", width = 10, height = 16, units = "cm", dpi = 500)
+
+
+wom_op  
+
+```
+#excluding all vice presidents - also Michaela Noll
+
+```{r}
+#IDs of (vice) presidents
+ID_vp_wom   <- c("11002019", "11000305", "11003206","11003212", "11003645")
+ID_vp_men <- c("11002800","11000907","11001274")
+
+load("dtm_wom.Rda")
+load("dtm_men.Rda")
+
+#################
+#####FEMALES#####
+#################
+
+#remove vice presidents from dfm object
+wom_op <- dfm_remove(dtm_wom, pattern=ID_vp_wom)
+
+
+full_op <- topfeatures(wom_op, length(wom_op@Dimnames$features)) #all topfeatures
+
+####Nice data frame for frequencies
+## no weight
+fem_wo_full <- full_op 
+#data frame
+wom_full_op <- data.frame(fem_wo_full)
+#Call variable Count
+names(wom_full_op)[1] <- 'Count'
+#include words in data frame
+wom_full_op$words <- rownames(wom_full_op)
+#include sex in data frame
+wom_full_op$sex <- c("women")
+#include a counting variable
+wom_full_op$count <- rep(1:nrow(wom_full_op))
+#include frequencies
+wom_full_op$frequ <- wom_full_op$Count/sum(wom_full_op$Count)
+
+wom_full_op_noll <- wom_full_op
+
+save(wom_full_op_noll, file="wom_full_op_noll.Rda")
+
+
+#To access a list of the most frequently occurring features, we can use topfeatures():
+top_wom_op <- topfeatures(wom_op, 15)
+top_wom_op
+
+fem_wo_op <- top_wom_op / sum(wom_full_op$Count)
+fem_wo_op
+
+
+#################
+######MALES######
+#################
+
+#remove vice presidents from dfm object
+men_op <- dfm_remove(dtm_men, pattern=ID_vp_men)
+
+
+full_op <- topfeatures(men_op, length(men_op@Dimnames$features)) #all topfeatures
+
+####Nice data frame for frequencies
+## no weight
+men_full <- full_op 
+#data frame
+men_full_op <- data.frame(men_full)
+#Call variable Count
+names(men_full_op)[1] <- 'Count'
+#include words in data frame
+men_full_op$words <- rownames(men_full_op)
+#include sex in data frame
+men_full_op$sex <- c("men")
+#include a counting variable
+men_full_op$count <- rep(1:nrow(men_full_op))
+#include frequencies
+men_full_op$frequ <- men_full_op$Count/sum(men_full_op$Count)
+
+sum(men_full_op$Count)
+
+save(men_full_op, file="men_full_op.Rda")
+
+
+#To access a list of the most frequently occurring features, we can use topfeatures():
+top_men_op <- topfeatures(men_op, 15)
+top_men_op
+
+male_wo_op <- top_men_op / sum(men_full_op$Count)
+male_wo_op
+
+
+################
+###COMPARISON###
+################
+#female and male words in one data frame
+
+wom <- data.frame(fem_wo_op)
+names(wom)[1] <- 'Frequency'
+wom$words <- rownames(wom)
+wom$sex <- c("women")
+
+men <- data.frame(male_wo_op)
+names(men)[1] <- 'Frequency'
+men$words <- rownames(men)
+men$sex <- c("men")
+
+
+both <- merge(men, wom, by=("words"), all=TRUE)
+both_exact <- merge(men, wom, by=("words"), all=FALSE)
+
+
+wom$labels <-
+  c(
+    "müssen (have to)",
+    "mehr (more)",
+    "Menschen (people)",
+    "vielen (very)",
+    "Herr (Mr.)",
+    "Dank (thanks)",
+    "Frau (woman/Mrs.)",
+    "Kollegen (male:
+                colleagues)",
+    "schon (already)",
+    "gibt (give*)",
+    "Bundesregierung
+                (government)",
+    "ganz (complete)",
+    "Kolleginnen (female:
+                colleagues)",
+    "Deutschland (Germany)",
+    "wer (who)"
+  )
+
+
+
+men$labels <-
+  c(
+    "müssen (have to)",
+    "mehr (more)",
+    "Herr (Mr.)",
+    "Deutschland (Germany)",
+    "gibt (give*)",
+    "Menschen (people)",
+    "Frau (woman/Mrs.)",
+    "schon (already)",
+    "Kollegen (male:
+                colleagues)",
+    "sagen (saying)",
+    "geht (go*)",
+    "heute (today)",
+    "Euro (euro)",
+    "ganz (complete)",
+    "dafür (in favor)"
+  )
+
+
+####################
+#######GRAPHS#######
+####################
+
+
+wom_op <- ggplot(wom, aes(x=reorder(labels, Frequency), y=Frequency)) +
+              theme_set(theme_classic()) +
+              theme(axis.text.y = element_text(size = 10)) +
+              ylim(0, 0.006) +
+              geom_bar(stat="identity", width = 0.7, fill = "darkgrey",
+                       position=position_dodge()) +
+              coord_flip() + 
+              labs(x = "Words", y = "Relative Frequency", 
+                   title ="Women")
+
+ggsave(wom_op, filename = "wom_op.jpg", device = "jpg", width = 10, height = 16, units = "cm", dpi = 500)
+
+men_op <- ggplot(men, aes(x=reorder(labels, Frequency), y=Frequency)) +
+              theme_set(theme_classic()) +
+             theme(axis.text.y = element_text(size = 10)) +
+              ylim(0, 0.006) +
+              geom_bar(stat="identity", width = 0.7, fill = "darkslategrey",
+                       position=position_dodge()) +
+              coord_flip() + 
+              labs(x = "Words", y = "Relative Frequency", 
+                   title ="Men")
+
+
+men_op 
+ggsave(men_op, filename = "men_op.jpg", device = "jpg", width = 10, height = 16, units = "cm", dpi = 500)
+
+
+wom_op  
+
+```
